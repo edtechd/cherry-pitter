@@ -1,0 +1,453 @@
+================================================================================
+РУКОВОДСТВО ДЛЯ AI-АГЕНТОВ: FEM-АНАЛИЗ В FREECAD / GMSH / CALCULIX (CCX)
+Файл: FREECAD_FEM.txt
+Окружение: Linux (Ubuntu), FreeCAD 0.20+, Gmsh 4.15+, CalculiX ccx 2.17+
+================================================================================
+
+ДАННЫЙ ДОКУМЕНТ СОДЕРЖИТ ПОЛНУЮ ИНСТРУКЦИЮ, ПРАВИЛА, ЛОВУШКИ И ГОТОВЫЙ КОД
+ДЛЯ БЕЗОШИБОЧНОГО ПРОВЕДЕНИЯ РАСЧЕТА НАПРЯЖЕННО-ДЕФОРМИРОВАННОГО СОСТОЯНИЯ (FEM)
+НА ЭТОЙ СИСТЕМЕ В HEADLESS (OFFSCREEN) РЕЖИМЕ.
+
+--------------------------------------------------------------------------------
+1. АРХИТЕКТУРА И ПУТИ К ИНСТРУМЕНТАМ НА ЭТОМ КОМПЬЮТЕРЕ
+--------------------------------------------------------------------------------
+- Python библиотеки FreeCAD:
+    /usr/lib/freecad/lib
+    /usr/share/freecad/Mod/Fem
+    /usr/share/freecad/Mod/Part
+    /usr/share/freecad/Mod/TechDraw
+- Исполняемые бинарные файлы:
+    Gmsh:     /home/devuser/bin/gmsh   (версия 4.15.2, доступен в PATH)
+    CalculiX: /usr/bin/ccx             (версия 2.17, вызывается как `ccx`)
+    FreeCAD:  /usr/bin/freecad         (версия 0.20/0.21)
+
+--------------------------------------------------------------------------------
+2. КРИТИЧЕСКИЕ ЛОВУШКИ И КАК ИХ ИЗБЕЖАТЬ (PITFALLS & WORKAROUNDS)
+--------------------------------------------------------------------------------
+
+[ЛОВУШКА 1: FreeCAD Fem и PySide2 в headless-скриптах]
+Проблема:
+  При импорте модулей Fem (`import feminout.importCcxFrdResults`, `import femresult.resulttools`)
+  FreeCAD в Linux пытается импортировать `PySide.QtGui`. Однако в установленном
+  пакете PySide2 многие классы (включая QAction, QApplication) вынесены в QtWidgets.
+  Это вызывает ошибку `ImportError: cannot import name 'QtGui' from 'PySide'`.
+Решение:
+  ПЕРЕД любым импортом FreeCAD вставить обязательный шим-адаптер:
+  ```python
+  import sys
+  sys.path.append('/usr/lib/freecad/lib')
+  sys.path.append('/usr/share/freecad/Mod/Fem')
+
+  import PySide2
+  from PySide2 import QtCore, QtGui, QtWidgets
+
+  class QtGuiShim:
+      def __getattr__(self, name):
+          if hasattr(QtGui, name):
+              return getattr(QtGui, name)
+          if hasattr(QtWidgets, name):
+              return getattr(QtWidgets, name)
+          raise AttributeError(f'module QtGui has no attribute {name}')
+
+  qtgui_shim = QtGuiShim()
+  sys.modules['PySide'] = PySide2
+  sys.modules['PySide.QtCore'] = QtCore
+  sys.modules['PySide.QtGui'] = qtgui_shim
+  sys.modules['PySide.QtWidgets'] = QtWidgets
+
+  app = QtWidgets.QApplication.instance()
+  if not app:
+      app = QtWidgets.QApplication(['FreeCAD', '-platform', 'offscreen'])
+
+  import FreeCAD
+  import Part
+  import feminout.importCcxFrdResults as f_imp
+  import femresult.resulttools as rt
+  ```
+
+[ЛОВУШКА 2: Согласованная система единиц (Consistent Units) в CalculiX]
+Проблема:
+  CalculiX не имеет встроенных единиц измерения. Все величины должны быть СТРОГО
+  согласованы между собой. Ошибка в единице плотности — частая причина краха
+  динамических или гравитационных расчетов.
+Решение:
+  Для геометрии в МИЛЛИМЕТРАХ (мм) используется стандартная шкала:
+    - Длина:             мм (mm)
+    - Сила:              Н (N)
+    - Масса:             т (tonne = 10^3 кг = 10^6 г)
+    - Время:             с (s)
+    - Напряжение/Модуль: МПа (MPa = Н/мм²)
+    - Плотность:         т/мм³ (tonne/mm³)  <-- ВНИМАНИЕ!
+        Пример для стали: 7850 кг/м³ = 7.85e-9 т/мм³
+        Пример для PETG:  1270 кг/м³ = 1.27e-9 т/мм³
+        Пример для PLA:   1240 кг/м³ = 1.24e-9 т/мм³
+        Пример для ABS:   1050 кг/м³ = 1.05e-9 т/мм³
+        Пример для алюм.: 2700 кг/м³ = 2.70e-9 т/мм³
+    - Ускорение:         мм/с² (g = 9810 мм/с²)
+    - Энергия / Момент:  мДж = Н·мм
+
+[ЛОВУШКА 3: Тип элементов сетки (C3D4 vs C3D10)]
+Проблема:
+  Линейные 4-узловые тетраэдры (C3D4) страдают эффектом «объемного запирания»
+  (shear locking / volumetric locking) при изгибе. Они показывают заниженный
+  в 2-5 раз прогиб и некорректные напряжения!
+Решение:
+  ВСЕГДА генерировать квадратичные 10-узловые тетраэдры C3D10 (Tetra10).
+  В Gmsh это флаг `-order 2`.
+  В CalculiX это тип `*ELEMENT, TYPE=C3D10, ELSET=EALL`.
+
+[ЛОВУШКА 4: Имя задания CalculiX (`ccx` CLI)]
+Проблема:
+  Бинарник `ccx` вызывается командой `ccx <jobname>` БЕЗ расширения `.inp`.
+  Если передать `ccx stripper.inp`, CalculiX будет искать файл `stripper.inp.inp`
+  и завершится с ошибкой `Error: input file does not exist`.
+Решение:
+  Работать в отдельной директории (например `/tmp/fem_run`) и вызывать:
+  ```python
+  job_name = "stripper_ccx" # файл /tmp/fem_run/stripper_ccx.inp
+  subprocess.run(['ccx', job_name], cwd=work_dir, check=True)
+  ```
+
+[ЛОВУШКА 5: Сингулярность при точечной нагрузке]
+Проблема:
+  Приложение сосредоточенной силы к одному узлу сетки создает сингулярность
+  напряжений по теории упругости: с измельчением сетки sigma -> infinity.
+Решение:
+  Нагрузку ВСЕГДА следует распределять по реалистичной площади контакта
+  (набору узлов `NLOAD`):
+  F_node = F_total / N_nodes.
+
+[ЛОВУШКА 6: OpenCASCADE топология твердого тела]
+Проблема:
+  Если B-Rep солид в FreeCAD невалиден (`shape.isValid() == False`) или содержит
+  самопересекающиеся поверхности, Gmsh зависнет или выдаст `Self-intersecting surface`.
+Решение:
+  Всегда проверять:
+  `assert shape.isValid(), "Shape invalid"`
+  `assert len(shape.Solids) == 1, "Expected single solid"`
+  Экспортировать в чистый STEP: `shape.exportStep(step_path)`.
+
+--------------------------------------------------------------------------------
+3. ПОШАГОВЫЙ ПАЙПЛАЙН FEM-АНАЛИЗА
+--------------------------------------------------------------------------------
+
+ШАГ 1: Построение и экспорт геометрии
+--------------------------------------
+1. Создать деталь средствами FreeCAD Part (или загрузить из скрипта проекта).
+2. Выполнить `shape = shape.removeSplitter()`.
+3. Проверить валидность: `shape.isValid()`.
+4. Экспортировать STEP: `shape.exportStep("/tmp/fem_run/part.step")`.
+
+ШАГ 2: Генерация КЭ-сетки через Gmsh
+-------------------------------------
+Запустить Gmsh из Python:
+```python
+cmd_gmsh = [
+    "/home/devuser/bin/gmsh",
+    step_file,
+    "-3",                 # 3D тетраэдрическая сетка
+    "-order", "2",        # 10-узловые квадратичные элементы C3D10
+    "-clmax", "1.5",      # Максимальный размер элемента (мм)
+    "-clmin", "0.4",      # Минимальный размер элемента в скруглениях (мм)
+    "-format", "inp",     # Выходной формат Abaqus / CalculiX
+    "-o", mesh_inp_file
+]
+subprocess.run(cmd_gmsh, check=True)
+```
+
+ШАГ 3: Фильтрация узлов и сборка расчетного файла CalculiX (*.inp)
+-------------------------------------------------------------------
+1. Прочитать `mesh_inp_file`.
+2. Извлечь блок `*NODE` (номера узлов и координаты X, Y, Z).
+3. Извлечь блок `*ELEMENT, type=C3D10` (номера элементов и узлы).
+4. Найти узлы закрепления по координатам (например, плоская грань Y = 0: `abs(y) < 1e-4`).
+5. Найти узлы приложения нагрузки (например, площадка вокруг отверстия).
+6. Записать единый расчетный файл `job_name.inp`:
+   - `*HEADING`
+   - `*NODE`
+   - `*ELEMENT, TYPE=C3D10, ELSET=EALL`
+   - `*NSET, NSET=NFIX` (список зафиксированных узлов)
+   - `*NSET, NSET=NLOAD` (список нагруженных узлов)
+   - `*MATERIAL, NAME=MATERIAL_NAME`
+   - `*ELASTIC` (Модуль Юнга в МПа, Коэффициент Пуассона)
+   - `*DENSITY` (Плотность в т/мм³)
+   - `*SOLID SECTION, ELSET=EALL, MATERIAL=MATERIAL_NAME`
+   - `*BOUNDARY` (NFIX, 1, 3, 0.0)
+   - `*STEP`
+   - `*STATIC`
+   - `*CLOAD` (NLOAD, <DOF 1..3>, <F_per_node>)
+   - `*NODE FILE` -> `U` (перемещения)
+   - `*EL FILE`   -> `S` (напряжения)
+   - `*END STEP`
+
+ШАГ 4: Запуск CalculiX (ccx)
+-----------------------------
+```python
+subprocess.run(['ccx', job_name], cwd=work_dir, check=True)
+```
+После завершения в папке появятся:
+- `job_name.dat` — текстовый лог
+- `job_name.frd` — бинарно-текстовые результаты (узлы, перемещения, напряжения)
+
+ШАГ 5: Парсинг результатов и вычисление напряжений Мизеса
+----------------------------------------------------------
+Используется парсер FreeCAD:
+```python
+frd_data = f_imp.read_frd_result(frd_file)
+nodes_dict = frd_data['Nodes']         # {nid: Vector(x, y, z)}
+tets_dict = frd_data['Tetra10Elem']    # {eid: [n1..n10]}
+stresses = frd_data['Results'][0]['stress'] # {nid: [s11, s22, s33, s12, s23, s31]}
+disps = frd_data['Results'][0]['disp']      # {nid: Vector(dx, dy, dz)}
+
+# Напряжение фон Мизеса:
+vms = {}
+for nid, (s11, s22, s33, s12, s23, s31) in stresses.items():
+    vm = math.sqrt(0.5 * ((s11 - s22)**2 + (s22 - s33)**2 + (s33 - s11)**2) + 
+                   3.0 * (s12**2 + s23**2 + s31**2))
+    vms[nid] = vm
+
+max_vm = max(vms.values())
+max_nid = max(vms, key=vms.get)
+max_disp_z = max(d.z for d in disps.values())
+```
+
+ШАГ 6: Сохранение результатов в FreeCAD .FCStd
+-----------------------------------------------
+```python
+doc = FreeCAD.newDocument("Doc_FEM")
+feat_part = doc.addObject("Part::Feature", "PartGeometry")
+feat_part.Shape = shape
+analysis = doc.addObject("Fem::FemAnalysis", "Analysis")
+res_fem = f_imp.importFrd(frd_file, analysis, "FemResult")
+doc.recompute()
+res_obj = doc.getObject("FemResultResults")
+rt.show_result(res_obj, "Sabs") # Отображение эквивалентных напряжений
+doc.recompute()
+doc.saveAs("output_fem_model.FCStd")
+```
+
+ШАГ 7: 3D-визуализация изополей через Matplotlib
+-------------------------------------------------
+Для отображения 3D-модели необходимо извлечь треугольники внешней границы (Boundary Faces):
+```python
+face_count = {}
+for eid, t in tets_dict.items():
+    c = t[:4] # 4 угловые вершины тетраэдра
+    for cf in [
+        tuple(sorted([c[0], c[1], c[2]])),
+        tuple(sorted([c[0], c[2], c[3]])),
+        tuple(sorted([c[0], c[3], c[1]])),
+        tuple(sorted([c[1], c[3], c[2]]))
+    ]:
+        face_count[cf] = face_count.get(cf, 0) + 1
+
+# Граничные треугольники встречаются ровно 1 раз:
+boundary_faces = [f for f, count in face_count.items() if count == 1]
+```
+Далее эти треугольники передаются в `Poly3DCollection` с интерполяцией цветов
+по значениям `vms[nid]`.
+
+--------------------------------------------------------------------------------
+4. ПОЛНЫЙ ГОТОВЫЙ ШАБЛОН СКРИПТА ДЛЯ АВТОМАТИЗАЦИИ
+--------------------------------------------------------------------------------
+
+Ниже приведен эталонный минимальный скрипт, готовый к запуску и кастомизации:
+
+```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Шаблон автоматизированного FEM-расчета в FreeCAD / Gmsh / CalculiX
+"""
+import sys
+import os
+import math
+import subprocess
+import numpy as np
+
+# 1. Шим PySide2 для FreeCAD Fem
+sys.path.append('/usr/lib/freecad/lib')
+sys.path.append('/usr/share/freecad/Mod/Fem')
+
+import PySide2
+from PySide2 import QtCore, QtGui, QtWidgets
+class QtGuiShim:
+    def __getattr__(self, name):
+        if hasattr(QtGui, name):
+            return getattr(QtGui, name)
+        if hasattr(QtWidgets, name):
+            return getattr(QtWidgets, name)
+        raise AttributeError(f'module QtGui has no attribute {name}')
+
+qtgui_shim = QtGuiShim()
+sys.modules['PySide'] = PySide2
+sys.modules['PySide.QtCore'] = QtCore
+sys.modules['PySide.QtGui'] = qtgui_shim
+sys.modules['PySide.QtWidgets'] = QtWidgets
+
+app = QtWidgets.QApplication.instance()
+if not app:
+    app = QtWidgets.QApplication(['FreeCAD', '-platform', 'offscreen'])
+
+import FreeCAD
+import Part
+import feminout.importCcxFrdResults as f_imp
+import femresult.resulttools as rt
+
+
+def run_fem(shape, 
+            fixed_node_filter, 
+            load_node_filter, 
+            force_total_n, 
+            force_dir_dof=3, # 1=X, 2=Y, 3=Z
+            young_modulus_mpa=2100.0, 
+            poisson_ratio=0.38, 
+            density_tonne_mm3=1.27e-9,
+            yield_strength_mpa=50.0,
+            mesh_clmax=1.2,
+            mesh_clmin=0.4,
+            work_dir="/tmp/fem_job",
+            output_fcstd="part_fem.FCStd"):
+    
+    os.makedirs(work_dir, exist_ok=True)
+    step_file = os.path.join(work_dir, "model.step")
+    mesh_inp = os.path.join(work_dir, "mesh.inp")
+    job_prefix = "calculix_run"
+    ccx_inp = os.path.join(work_dir, f"{job_prefix}.inp")
+    frd_file = os.path.join(work_dir, f"{job_prefix}.frd")
+
+    # 1. Валидация и экспорт STEP
+    assert shape.isValid(), "Геометрия невалидна!"
+    shape.exportStep(step_file)
+
+    # 2. Построение сетки Gmsh C3D10
+    cmd_gmsh = [
+        "/home/devuser/bin/gmsh", step_file,
+        "-3", "-order", "2",
+        "-clmax", str(mesh_clmax), "-clmin", str(mesh_clmin),
+        "-format", "inp", "-o", mesh_inp
+    ]
+    subprocess.run(cmd_gmsh, check=True, stdout=subprocess.DEVNULL)
+
+    # 3. Чтение узлов и элементов
+    nodes, elements = [], []
+    in_nodes, in_elem = False, False
+    with open(mesh_inp, 'r') as f:
+        for line in f:
+            s = line.strip()
+            if s.startswith('*NODE'):
+                in_nodes = True; in_elem = False
+                nodes.append(line); continue
+            elif s.startswith('*ELEMENT, type=C3D10'):
+                in_nodes = False; in_elem = True
+                elements.append('*ELEMENT, TYPE=C3D10, ELSET=EALL\n'); continue
+            elif s.startswith('*'):
+                in_nodes = False; in_elem = False
+                continue
+            if in_nodes: nodes.append(line)
+            elif in_elem: elements.append(line)
+
+    node_coords = {}
+    for line in nodes[1:]:
+        p = [x.strip() for x in line.split(',') if x.strip()]
+        if len(p) >= 4:
+            node_coords[int(p[0])] = [float(p[1]), float(p[2]), float(p[3])]
+
+    # 4. Выделение граничных узлов
+    fixed_nodes = [nid for nid, (x, y, z) in node_coords.items() if fixed_node_filter(x, y, z)]
+    load_nodes = [nid for nid, (x, y, z) in node_coords.items() if load_node_filter(x, y, z)]
+    assert len(fixed_nodes) > 0, "Не найдены узлы закрепления!"
+    assert len(load_nodes) > 0, "Не найдены узлы нагружения!"
+    f_per_node = force_total_n / len(load_nodes)
+
+    # 5. Формирование .inp для CalculiX
+    with open(ccx_inp, 'w') as f:
+        f.write('*HEADING\nFreeCAD Auto FEM\n')
+        f.writelines(nodes)
+        f.writelines(elements)
+        f.write('*NSET, NSET=NFIX\n' + ', '.join(map(str, fixed_nodes)) + '\n')
+        f.write('*NSET, NSET=NLOAD\n' + ', '.join(map(str, load_nodes)) + '\n')
+        f.write(f'*MATERIAL, NAME=MAT\n*ELASTIC\n{young_modulus_mpa}, {poisson_ratio}\n')
+        f.write(f'*DENSITY\n{density_tonne_mm3}\n')
+        f.write('*SOLID SECTION, ELSET=EALL, MATERIAL=MAT\n')
+        f.write('*BOUNDARY\nNFIX, 1, 3, 0.0\n')
+        f.write(f'*STEP\n*STATIC\n*CLOAD\nNLOAD, {force_dir_dof}, {f_per_node:.6f}\n')
+        f.write('*NODE FILE\nU\n*EL FILE\nS\n*END STEP\n')
+
+    # 6. Расчет
+    subprocess.run(['ccx', job_prefix], cwd=work_dir, check=True, stdout=subprocess.DEVNULL)
+
+    # 7. Чтение результатов
+    frd = f_imp.read_frd_result(frd_file)
+    nodes_d = frd['Nodes']
+    stresses = frd['Results'][0]['stress']
+    disps = frd['Results'][0]['disp']
+
+    vms = {}
+    for nid, s in stresses.items():
+        vms[nid] = math.sqrt(0.5*((s[0]-s[1])**2 + (s[1]-s[2])**2 + (s[2]-s[0])**2) + 
+                             3.0*(s[3]**2 + s[4]**2 + s[5]**2))
+
+    max_vm = max(vms.values())
+    max_disp = max(d.Length for d in disps.values())
+    safety_factor = yield_strength_mpa / max_vm
+
+    print(f"--- РЕЗУЛЬТАТЫ FEM-АНАЛИЗА ---")
+    print(f"Макс. напряжение von Mises: {max_vm:.2f} МПа")
+    print(f"Макс. деформация:          {max_disp:.3f} мм")
+    print(f"Коэффициент запаса n:      {safety_factor:.2f}")
+
+    # 8. Сохранение в .FCStd
+    doc = FreeCAD.newDocument("Doc_FEM")
+    feat = doc.addObject("Part::Feature", "PartGeometry")
+    feat.Shape = shape
+    analysis = doc.addObject("Fem::FemAnalysis", "Analysis")
+    f_imp.importFrd(frd_file, analysis, "FemResult")
+    doc.recompute()
+    doc.saveAs(output_fcstd)
+    print(f"Модель сохранена в: {output_fcstd}")
+
+    return {
+        'max_vm': max_vm,
+        'max_disp': max_disp,
+        'safety_factor': safety_factor,
+        'vms': vms,
+        'disps': disps,
+        'nodes': nodes_d
+    }
+```
+
+--------------------------------------------------------------------------------
+5. СПРАВОЧНЫЕ ПАРАМЕТРЫ МАТЕРИАЛОВ ДЛЯ 3D-ПЕЧАТИ И КОНСТРУКЦИОННЫХ СТАЛЕЙ
+--------------------------------------------------------------------------------
+(Все значения согласованы для размерности: длина мм, сила Н, масса т)
+
+| Материал            | E (МПа) |  nu  | rho (т/мм³) | sigma_y (МПа) | Допуск. [sigma] (n=1.5) |
+|---------------------|:-------:|:----:|:-----------:|:-------------:|:-----------------------:|
+| PETG (изотропный)   |  2100   | 0.38 |   1.27e-9   |     50.0      |         33.3 МПа        |
+| PLA (изотропный)    |  3500   | 0.36 |   1.24e-9   |     60.0      |         40.0 МПа        |
+| ABS (изотропный)    |  2000   | 0.35 |   1.05e-9   |     40.0      |         26.7 МПа        |
+| Nylon PA12          |  1700   | 0.40 |   1.02e-9   |     45.0      |         30.0 МПа        |
+| Сталь 45 (ГОСТ 1050)| 210000  | 0.28 |   7.85e-9   |    355.0      |        236.7 МПа        |
+| Сталь 12Х18Н10Т     | 198000  | 0.30 |   7.90e-9   |    215.0      |        143.3 МПа        |
+| Алюминий Д16Т       |  72000  | 0.33 |   2.78e-9   |    275.0      |        183.3 МПа        |
+| Латунь ЛС59-1       | 105000  | 0.35 |   8.40e-9   |    160.0      |        106.7 МПа        |
+
+--------------------------------------------------------------------------------
+6. ИНЖЕНЕРНЫЙ ЧЕКЛИСТ ВЕРИФИКАЦИИ РАСЧЕТА
+--------------------------------------------------------------------------------
+1. Проверка равновесия: сумма реакций опор в `job.dat` должна с точностью до 0.1%
+   совпадать с приложенной нагрузкой.
+2. Проверка сходимости по сетке (Mesh convergence): измельчение сетки на 30%
+   не должно менять напряжения в теле детали более чем на 3-5%.
+3. Различение сингулярности и концентратора:
+   - Входящий острый угол 90° без скругления — сингулярность (требует скругления R >= 1 мм).
+   - Сглаженный угол или отверстие с галтелью — физический концентратор (напряжение
+     стабилизируется и не растет бесконечно при измельчении сетки).
+4. Проверка знаков перемещений: если сила действует вверх (+Z), прогиб должен
+   быть положительным (+Z). Отрицательный прогиб указывает на ошибку знака в *CLOAD.
+5. Запас прочности: n = sigma_y / sigma_vM_max >= 1.5 для статических нагрузок.
+
+================================================================================
+КОНЕЦ ДОКУМЕНТА
+================================================================================

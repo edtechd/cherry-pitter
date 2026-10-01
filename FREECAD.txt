@@ -1,0 +1,764 @@
+# FreeCAD Automation & GOST (ESKD) Drawing Standard Guide
+# Reference Manual for Headless Scripting, B-Rep Modeling, and Automated Engineering Drawings
+
+This document serves as the authoritative, production-tested reference for automating 3D solid modeling, collision detection, and 2D engineering drawing generation in FreeCAD (specifically FreeCAD 0.19+ on headless Linux environments), adhering to GOST (ESKD) technical drawing standards.
+
+---
+
+## 1. Environment & Headless Initialization
+
+### 1.1 Python Paths and Module Resolution
+In standard Linux / container environments, FreeCAD's Python bindings are located under `/usr/lib/freecad/lib` and `/usr/share/freecad/Mod/TechDraw`. These must be appended to `sys.path` before importing any FreeCAD modules:
+
+```python
+import sys
+import os
+
+sys.path.append('/usr/lib/freecad/lib')
+sys.path.append('/usr/share/freecad/Mod/TechDraw')
+```
+
+### 1.2 The Headless Qt / TechDraw Crash Trap (`SIGABRT`)
+**CRITICAL FINDING:** Calling `FreeCADGui.setupWithoutGUI()` alone will cause a fatal `SIGABRT` crash when importing `TechDrawGui` or attempting to export drawings. TechDraw's 2D projection engine and export pipeline rely internally on Qt's `QGraphicsScene` and `QGraphicsItem` view providers.
+
+**The Solution:**
+You must instantiate a headless `QtWidgets.QApplication` with the `-platform offscreen` flag **before** importing `FreeCADGui`, and you must call `FreeCADGui.showMainWindow()` to initialize the GUI scenegraph in offscreen mode.
+
+```python
+from PySide2 import QtWidgets, QtGui, QtSvg, QtCore
+
+# 1. Initialize headless Qt application for offscreen rendering
+app = QtWidgets.QApplication.instance()
+if not app:
+    app = QtWidgets.QApplication(['FreeCAD', '-platform', 'offscreen'])
+
+import FreeCAD
+import FreeCADGui
+
+# 2. showMainWindow() in offscreen mode is strictly required to attach
+# QGraphicsScene view providers to TechDraw pages.
+FreeCADGui.showMainWindow()
+
+import Part
+import TechDraw
+import TechDrawGui
+
+doc = FreeCAD.newDocument("Automated_Drawing")
+```
+
+---
+
+## 2. Solid Modeling via Part Workbench (B-Rep)
+
+TechDraw generates 2D vector projections using B-Rep (Boundary Representation) topology. **Never use faceted triangle meshes (STL/OBJ) or CSG polygon approximations.** Meshes generate thousands of faceted edges, distorted silhouette curves, and rendering artifacts on drawings.
+
+### 2.1 Essential B-Rep Primitives
+Always construct parts using the `Part` module:
+
+```python
+# Box (dx, dy, dz) at position p
+box = Part.makeBox(100.0, 50.0, 20.0, FreeCAD.Vector(0, 0, 0))
+
+# Cylinder (radius, height, position, direction)
+cyl = Part.makeCylinder(10.0, 40.0, FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1))
+
+# Cone / Truncated Cone (r1, r2, height, position, direction)
+cone = Part.makeCone(15.0, 5.0, 30.0, FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1))
+
+# Torus / Ring (r_major, r_minor)
+torus = Part.makeTorus(30.0, 5.0)
+
+# Sphere (radius, center_vector)
+sphere = Part.makeSphere(25.0, FreeCAD.Vector(0, 0, 0))
+```
+
+### 2.2 Boolean Operations & The Tangency Trap
+```python
+# Boolean Cut (subtraction)
+part_with_hole = box.cut(cyl)
+
+# Boolean Fuse (union)
+joined_body = box.fuse(cyl)
+
+# Boolean Common (intersection)
+overlap = box.common(cyl)
+```
+
+> [!CAUTION]
+> **THE TANGENCY TRAP (Non-Manifold Topology & Disappearing Parts):**
+> When performing `cut` or `fuse`, if the cutting face or edge lies **exactly coplanar** (`coincident`) with a face of the target shape, OpenCASCADE often creates a non-manifold edge or degenerate singular vertex.
+> 
+> *Consequence:* `shape.isValid()` returns `False`. FreeCAD 3D view might still show a glitchy shape, but **TechDraw will silently drop the component during 2D projection!**
+> 
+> *Remedy:* Always overlap cutting bodies by an $\epsilon \ge 0.5\dots1.0$ mm beyond the boundary:
+> ```python
+> # DANGEROUS (exact face alignment):
+> slot = Part.makeBox(10.0, 10.0, 20.0, FreeCAD.Vector(0, 0, 0))
+> body = Part.makeBox(50.0, 50.0, 20.0, FreeCAD.Vector(0, 0, 0))
+> 
+> # SAFE (oversized and offset tool):
+> slot = Part.makeBox(12.0, 10.0, 24.0, FreeCAD.Vector(-1.0, 0, -2.0))
+> ```
+
+### 2.2.1 The Hemispherical Cavity Tangency Trap & Boolean Cut Order
+
+When creating spherical depressions, cavities, or pockets on a planar face of a solid (e.g. berry pockets on a rotor drum, ball bearing sockets):
+
+#### Trap A: Equator-Plane Singularity (Non-Manifold Boundary)
+If a sphere with radius $R$ is placed with its center directly on the planar face of a part ($Z_{center} = Z_{face}$), the equator of the sphere coincides with the surface plane $Z_{face}$.
+- **Mathematical Root Cause:** At the equator, the surface normal of the sphere is parallel to the plane, and the tangent plane is perpendicular ($90^\circ$). The intersection angle between the sphere surface and the planar face vanishes to zero (tangency singularity).
+- **OpenCASCADE Failure:** `BRepAlgoAPI_Cut` frequently generates non-manifold edges, degenerated circular wires, or unclosed shells. As a result, `shape.isValid()` evaluates to `False`. While FreeCAD's 3D viewer might render a faceted approximation, **TechDraw's Hidden Line Removal (HLR) projection will silently omit the part or produce broken silhouette curves.**
+- **The Verified Fix:** Fuse the sphere with an extension cylinder of identical radius $R$ protruding outward past the face by $\Delta h \ge 3\dots 5$ mm before cutting:
+
+```python
+# WRONG (creates non-manifold edge at equator):
+sph = Part.makeSphere(R, FreeCAD.Vector(px, py, Z_face))
+body = body.cut(sph) # isValid() -> False! TechDraw drops the shape!
+
+# CORRECT (clean perpendicular cut through face):
+sph = Part.makeSphere(R, FreeCAD.Vector(px, py, Z_face))
+cyl_up = Part.makeCylinder(R, 5.0, FreeCAD.Vector(px, py, Z_face), FreeCAD.Vector(0, 0, 1))
+pocket_tool = sph.fuse(cyl_up)
+body = body.cut(pocket_tool) # isValid() -> True, perfect hemispherical cavity
+```
+
+#### Trap B: Boolean Cut Order & The Revolved Parametric Seam
+In OpenCASCADE, analytical surfaces of revolution (cylinders, cones, tori) possess a parametric seam curve at parameter $u = 0$. For a standard cylinder created at the origin, this seam curve lies along the $+X$ axis ($0^\circ$ azimuth).
+- **The Collision:** If an annular groove (or concentric cylinder) is subtracted from a cylindrical body *before* cutting radial features located at $0^\circ$ (angle 0), the cutting tool of feature 0 lands directly on the parametric seam edge of the pre-existing groove.
+- **Consequence:** The boolean subtraction of feature 0 silently fails (`cut volume = 0.00 mm³`), leaving that pocket uncut or corrupting the B-Rep topology.
+- **The Rule:** **Always cut discrete radial pockets and through-holes FIRST, and cut continuous annular/circumferential grooves AFTERWARD.**
+
+#### Trap C: Insufficient Penetration of Through-Hole Cylinders
+When punching a hole (e.g. ejection hole $\varnothing 9.5$, radius $r_{hole}$) through the bottom of a spherical cavity of radius $R$:
+- The lowest point of the sphere is at $Z_{bot} = Z_{face} - R$.
+- However, at the radius of the hole $r_{hole}$, the spherical wall is at height:
+  $$Z(r_{hole}) = Z_{face} - \sqrt{R^2 - r_{hole}^2} > Z_{bot}$$
+- If the cutting cylinder's top face only slightly exceeds $Z_{bot}$ (e.g. by 1 mm), its top cap can be coplanar with or tangent to the curved spherical shell, producing non-manifold slivers.
+- **The Rule:** The through-hole cylinder must penetrate well into the open cavity:
+  $$Z_{top\_hole} \ge Z_{face} - R + \Delta \quad (\Delta \ge 3\dots 5\text{ mm})$$
+
+### 2.3 Spatial Transformations and Matrix Rotations
+When orienting angled shafts, bevel gears, or angled linkages:
+```python
+import math
+
+# Direct Translation
+shape_moved = shape.copy()
+shape_moved.translate(FreeCAD.Vector(dx, dy, dz))
+
+# Simple Rotation around an axis passing through a center point
+shape_rotated = shape.copy()
+shape_rotated.rotate(FreeCAD.Vector(cx, cy, cz), FreeCAD.Vector(ax, ay, az), angle_degrees)
+
+# Complex 3D Spatial Placement via FreeCAD.Matrix:
+# NOTE: Matrix.rotateX(), rotateY(), rotateZ() take RADIANS, not degrees!
+mat1 = FreeCAD.Matrix()
+mat1.rotateY(math.radians(90.0))  # Rotate around Y by 90 deg
+
+mat2 = FreeCAD.Matrix()
+mat2.rotateZ(math.radians(225.07)) # Rotate around Z by 225 deg
+
+# Multiply matrices: final = Rz * Ry
+final_mat = mat2.multiply(mat1)
+
+placement = FreeCAD.Placement(final_mat)
+placement.move(FreeCAD.Vector(target_x, target_y, target_z))
+shape.Placement = placement
+```
+
+### 2.4 Validating Shapes Programmatically
+Always verify solid validity before adding shapes to the TechDraw document:
+```python
+if shape.isNull():
+    raise ValueError("Shape is NULL!")
+if not shape.isValid():
+    print("WARNING: Shape is topologically invalid! TechDraw projection may drop it.")
+print(f"Part Volume: {shape.Volume:.2f} mm^3, Faces: {len(shape.Faces)}")
+```
+
+### 2.5 Automated Collision & Clearance Checking
+One of FreeCAD's greatest strengths in headless mode is programmatic clearance verification between components:
+```python
+def check_collision(shape_a, shape_b, name_a="PartA", name_b="PartB"):
+    """Returns True if there is a physical clash (intersection volume > 0)."""
+    clash = shape_a.common(shape_b)
+    vol = clash.Volume
+    if vol > 1e-4:
+        print(f"COLLISION DETECTED between {name_a} and {name_b}: {vol:.4f} mm^3")
+        return False, vol
+    print(f"CLEAN: {name_a} and {name_b} zero clash (0.00 mm^3)")
+    return True, 0.0
+```
+
+### 2.6 Compounds for Assemblies
+Combine individual solid shapes into a `Compound` for TechDraw projection. This allows the HLR engine to compute occlusion between parts accurately:
+```python
+compound_shapes = [part1_shape, part2_shape, part3_shape]
+assembly_compound = Part.makeCompound(compound_shapes)
+
+assembly_feature = doc.addObject("Part::Feature", "Assembly")
+assembly_feature.Shape = assembly_compound
+doc.recompute()
+```
+
+### 2.7 Design for Additive Manufacturing (DFAM) & Assembly Ergonomics
+
+When designing mechanical components intended for FDM 3D printing and manual bench assembly, mechanical simplicity, printability, and tool access must guide the solid modeling process:
+
+#### 2.7.1 The Rule of Monolithic Simplicity (Avoid Over-Engineering)
+- **Avoid Conglomerate Geometry:** Never construct parts as an ad-hoc assemblage of separate boxes, stepped blocks, and redundant secondary ribs fused together. Every unnecessary step, ledge, or pocket increases stress concentrations, complicates slicing, and introduces visual confusion on 2D engineering drawings.
+- **Unified Load Paths:** Design clean, continuous uprights (e.g. a monolithic pillar or smooth trapezoidal pedestal) where the cross-section flows naturally from the base flange to the bearing boss.
+- **Rule of Thumb:** If a single stiffening web of adequate thickness ($6\dots 8$ mm) or a slightly wider monolithic column provides sufficient structural rigidity, never add secondary side blocks.
+
+#### 2.7.2 Fastener & Tool Access Envelope (Clearance for Wrenches and Screws)
+A frequent and severe design flaw is placing stiffening ribs, gusset blocks, or vertical walls directly adjacent to mounting holes:
+- **Vertical Line-of-Sight Clearance:** Every fastener hole (e.g. M3, M4 counterbored holes in a base flange) requires an unobstructed vertical cylinder of clearance extending above the hole to allow insertion of screws, hex keys (Allen keys), and screwdrivers.
+- **Tool Clearance Distances:**
+  - For M4 DIN 912 socket head screws ($d_{head} = 7.0$ mm, key size 3 mm): keep a minimum radius $R_{clear} \ge 6.0$ mm (distance from hole axis to any vertical wall $\ge 6.0$ mm; clearance $\ge 2.5$ mm from edge of counterbore).
+  - For M8 DIN 912 socket head screws ($d_{head} = 13.0$ mm, key size 6 mm): keep a minimum radius $R_{clear} \ge 11.0$ mm; if using an external socket wrench (e.g. for M8 hex nut ISO 4032, $S = 13$ mm, outer socket $\varnothing 18\dots 19$ mm), maintain an open envelope of at least $\varnothing 20$ mm.
+- **No Blocked Pockets or Step Ledges:** Never create a stepped ledge or shelf right above or below a fastener axis. A nut or bolt head counterbore must either be open from above or situated on a flush vertical face to allow unhindered tool engagement.
+
+#### 2.7.3 The 3D-Printing (FDM) Overhang Rule & Cantilever Bearing Spacers
+FDM printers build parts layer-by-layer along the vertical build axis ($+Z$). Any surface sloping at more than $45^\circ$ from the vertical (or $90^\circ$ horizontal overhangs) requires disposable support structures or will droop and fail:
+- **The Bearing Spacer Trap:** A cylindrical shoulder (e.g. $\varnothing 12$ mm protruding horizontally by 2 mm from a $\varnothing 24$ mm vertical boss) has a $90^\circ$ horizontal underside floating in mid-air above the build plate. In FDM printing without supports, this horizontal ceiling will print spaghetti.
+- **Solution A (Best Practice — Standard Metal Shim):** Make the front face of the plastic boss completely flat and flush. Space off the bearing's inner ring using a standard precision steel washer (DIN 988 shim washer, e.g. $8 \times 14 \times 1$ mm or $8 \times 12 \times 2$ mm, or DIN 125 M8). Steel-on-steel contact with the bearing inner ring has significantly lower friction, prevents plastic wear/creep under clamping axial loads, and allows 100% support-free flat printing.
+- **Solution B (Integrated Chamfer):** If a shoulder must be integrated into the plastic body, the underside MUST feature a $45^\circ$ conical transition (chamfer) extending from the boss face to the outer diameter of the shoulder.
+
+#### 2.7.4 Orthogonal Drawing Projection Clarity (Preventing Multi-Rib Confusion)
+When multiple ribs or gussets of identical or similar slope (e.g. $45^\circ$) are positioned at different depth planes (e.g. a central rear rib and separate lateral side blocks), their 2D orthographic projections onto the side view overlap:
+- On a 2D engineering drawing, this produces intersecting diagonal lines and phantom visual steps that confuse machinists and reviewers.
+- **Rule:** Keep stiffener geometry unified: use a single central stiffening web, or external gussets that terminate neatly at the same plane. Eliminate extraneous intermediate steps so that orthogonal projections present crisp, unambiguous contours.
+
+---
+
+## 3. TechDraw Setup & The View Coordinate Bug
+
+### 3.1 Creating the Drawing Page with a GOST Template
+FreeCAD provides standard GOST title block templates in SVG format:
+
+| Format | Template Path | Sheet Size |
+|---|---|---|
+| **A1 Landscape** | `/usr/share/freecad/Mod/TechDraw/Templates/RU_GOST/Leading/Landscape_A1.svg` | $841 \times 594$ mm |
+| **A2 Landscape** | `/usr/share/freecad/Mod/TechDraw/Templates/RU_GOST/Leading/Landscape_A2.svg` | $594 \times 420$ mm |
+| **A3 Landscape** | `/usr/share/freecad/Mod/TechDraw/Templates/RU_GOST/Leading/Landscape_A3.svg` | $420 \times 297$ mm |
+| **A4 Portrait** | `/usr/share/freecad/Mod/TechDraw/Templates/RU_GOST/Leading/Portrait_A4.svg` | $210 \times 297$ mm |
+
+```python
+page = doc.addObject('TechDraw::DrawPage', 'DrawingPage')
+template = doc.addObject('TechDraw::DrawSVGTemplate', 'Template')
+template.Template = '/usr/share/freecad/Mod/TechDraw/Templates/RU_GOST/Leading/Landscape_A1.svg'
+page.Template = template
+```
+
+### 3.2 CRITICAL BUG: The View Coordinate Reset Trap
+> [!WARNING]
+> **SYMPTOM:** When you set `view.X = 100` and `view.Y = 200` before adding the view to the page, all views snap to the center of the sheet and overlap.
+> **CAUSE:** Calling `page.addView(view)` **resets** `view.X` and `view.Y` to `page.Template.Width / 2` and `page.Template.Height / 2`.
+> **RULE:** You must **ALWAYS** assign `view.X`, `view.Y`, and `view.Scale` **AFTER** calling `page.addView(view)`, followed by `doc.recompute()`.
+
+```python
+# 1. Create view and assign source and projection direction
+view = doc.addObject('TechDraw::DrawViewPart', 'FrontView')
+view.Source = [assembly_feature]
+view.Direction = (0.0, -1.0, 0.0)
+
+# 2. Add view to page FIRST (this resets coordinates)
+page.addView(view)
+doc.recompute()
+
+# 3. Assign true coordinates and scale AFTER addView
+view.Scale = 1.0
+view.X = 185.0
+view.Y = 405.0
+
+# 4. Clean up edge display properties for speed & clarity
+view.CoarseView = False
+view.SmoothVisibleEdges = True
+view.SeamVisibleEdges = False
+view.IsoCount = 0  # 0 disables wireframe isoparametric lines (massively speeds up HLR)
+
+doc.recompute()
+```
+
+### 3.3 Section Views via `TechDraw::DrawViewSection` (ГОСТ 2.305-68)
+In mechanical engineering drawings, internal cavities, stepped bores, bearing seats, and internal threads must be revealed using cutting planes (разрезы и сечения) instead of cluttered hidden wireframe lines.
+
+#### 3.3.1 Creating and Configuring a Section View
+A section view in TechDraw is derived from a reference `BaseView` (such as `TopView`), which establishes the projection plane and on which TechDraw automatically renders the cutting plane line, directional arrows, and letter designations:
+
+```python
+# 1. Instantiate the section view and link to BaseView
+sec = doc.addObject("TechDraw::DrawViewSection", "SectionView_AA")
+sec.BaseView = v_top                               # Base view (e.g. TopView)
+sec.SectionNormal = FreeCAD.Vector(0.0, 1.0, 0.0)  # Normal vector perpendicular to cutting plane
+sec.SectionOrigin = FreeCAD.Vector(0.0, 0.0, 12.0) # 3D point through which the cutting plane passes
+sec.SectionDirection = "Up"                        # Projection direction relative to cut
+sec.SectionSymbol = "A"                            # Designator letter (produces 'А-А' on drawing)
+
+# 2. Add to page FIRST (resets view coordinates to sheet center)
+page.addView(sec)
+doc.recompute()
+
+# 3. Configure view properties and coordinates AFTER addView
+sec.Direction = FreeCAD.Vector(0.0, 1.0, 0.0)
+sec.XDirection = FreeCAD.Vector(1.0, 0.0, 0.0)
+sec.X = 135.0   # Horizontal alignment with TopView (X_sec == X_top)
+sec.Y = 210.0   # Vertical position on sheet
+sec.IsoCount = 0 # Strictly disable wireframe isoparametrics
+sec.ViewObject.HatchColor = (0.0, 0.0, 0.0, 1.0) # Solid black hatch lines per GOST
+doc.recompute()
+```
+
+#### 3.3.2 Orientation and Direction Setup (`Direction`, `XDirection`, `Rotation`)
+When projecting a section view:
+- **`sec.Direction`**: Camera view direction for the cut projection (e.g. `(0, 1, 0)` for looking along $+Y$, or `(-1, 0, 0)` for looking along $-X$).
+- **`sec.XDirection`**: 3D vector defining the horizontal axis in the 2D projection view.
+- **`sec.Rotation`**: 2D planar rotation angle (in degrees) to orient the projection upright on the sheet if the projection matrix maps $+Z$ downward (e.g. `sec.Rotation = 180.0`).
+- **Standard Hatching (ГОСТ 2.305-68)**: FreeCAD TechDraw provides built-in automatic hatching via `sec.CutSurfaceDisplay = 'SvgHatch'` (enabled by default). Set the hatch line color to solid black:
+  ```python
+  sec.ViewObject.HatchColor = (0.0, 0.0, 0.0, 1.0)  # Solid black hatch lines per GOST
+  ```
+  This keeps drawing scripts compact and relies directly on FreeCAD's native B-Rep section cutting engine.
+
+---
+
+## 4. Text & Annotations: The UTF-8 / Cyrillic Mojibake Workaround
+
+### 4.1 The FreeCAD 0.19 Cyrillic Encoding Bug
+In FreeCAD 0.19, `TechDraw::DrawViewAnnotation` splits 2-byte UTF-8 Cyrillic characters into single Latin-1 bytes, producing illegible gibberish / mojibake (e.g., `РЎР±РѕСЂРѕС‡РЅС‹Р№...`).
+
+### 4.2 The Solution: `TechDraw::DrawViewSymbol` with Inline SVG
+Use `TechDraw::DrawViewSymbol` with embedded SVG markup. SVG natively supports UTF-8 and renders clean, scalable text using system fonts (`osifont`, `Arial`, `sans-serif`).
+
+```python
+svg_notes = '''<svg xmlns="http://www.w3.org/2000/svg" width="185mm" height="80mm" viewBox="0 0 185 80">
+  <text x="5" y="10" font-family="osifont, Arial" font-size="3.5" font-weight="bold" fill="black">
+    Технические требования:
+  </text>
+  <text x="5" y="18" font-family="osifont, Arial" font-size="3.2" fill="black">
+    1. * Размеры для справок.
+  </text>
+</svg>'''
+
+notes_symbol = doc.addObject('TechDraw::DrawViewSymbol', 'TechNotes')
+notes_symbol.Symbol = svg_notes
+page.addView(notes_symbol)
+doc.recompute()
+
+# Center position of the symbol on the page
+notes_symbol.X = 743.5
+notes_symbol.Y = 100.0
+doc.recompute()
+```
+
+---
+
+## 5. GOST (ESKD) Technical Drawing Standards
+
+When generating engineering drawings per GOST (Unified System for Design Documentation — ЕСКД), adhere to the following standards:
+
+### 5.1 Projection Alignment (ГОСТ 2.305-68)
+GOST strictly uses **First-Angle Projection** (Method E). Projections must be aligned along projection lines:
+
+```
++-------------------------------------------------------------------+
+|  [ Главный вид ] (Front View)        [ Вид слева ] (Left View)     |
+|   Direction = (0, -1, 0)              Direction = (1, 0, 0)       |
+|   (X = 185, Y = 405)                  (X = 445, Y = 405)          |
+|                                                                   |
+|  [ Вид сверху ] (Top View)           [ Аксонометрия ] (Isometric) |
+|   Direction = (0, 0, 1)               Direction = (1, -1.2, 0.9)  |
+|   (X = 185, Y = 165)                  (X = 445, Y = 165)          |
++-------------------------------------------------------------------+
+```
+
+- **Главный вид (Front View)**: Direction `(0, -1, 0)`.
+- **Вид сверху (Top View)**: Direction `(0, 0, 1)`. Placed **directly below** the Front View, sharing the **exact same X-coordinate** (`top_view.X = front_view.X`).
+- **Вид слева (Left View)**: Direction `(1, 0, 0)`. Placed **directly to the right** of the Front View, sharing the **exact same Y-coordinate** (`left_view.Y = front_view.Y`).
+- **Аксонометрия / Изометрия (Isometric View)**: Direction `(1, -1, 1)` or `(1, -1.2, 0.9)`.
+
+### 5.2 Title Block / Основная надпись (ГОСТ 2.104-2006, Форма 1)
+Located in the **bottom-right corner** of the sheet. Width is strictly **185 mm**, height is **55 mm**.
+The built-in RU_GOST templates contain editable fields accessible via `template.setEditFieldContent()`:
+
+```python
+template.setEditFieldContent('Номер', 'ВЧ.00.00.000 СБ')         # Document Designation
+template.setEditFieldContent('Название', 'Сборочный чертеж')      # Document Name
+template.setEditFieldContent('Информация', 'Автомат очистки вишни') # Additional Info
+template.setEditFieldContent('Масштаб', '1:1')                    # Drawing Scale
+template.setEditFieldContent('Лист', '1')                         # Sheet Number
+template.setEditFieldContent('Листов', '1')                       # Total Sheets
+template.setEditFieldContent('Масса', '0.650')                    # Weight in kg
+template.setEditFieldContent('Организация1', 'ПРОЕКТ VISHNI')     # Company / Dept
+template.setEditFieldContent('Разработал', 'Инженер')             # Author Name
+template.setEditFieldContent('Проверил', 'Контролер')             # Checker Name
+template.setEditFieldContent('Утвердил', 'Руководитель')          # Approver Name
+template.setEditFieldContent('Дата_разработки', '18.09.26')       # Date
+doc.recompute()
+```
+
+### 5.3 Dynamic Specification Table / BOM (ГОСТ 2.106-96)
+Generate the specification table as an SVG symbol positioned directly above the title block:
+- Standard table width: **185.0 mm**.
+- Column boundaries: `[0, 12, 57, 132, 147, 185]` mm:
+  - Поз. (12 mm)
+  - Обозначение (45 mm)
+  - Наименование (75 mm)
+  - Кол. (15 mm)
+  - Примечание (38 mm)
+- Group into sections: `Сборочные единицы и детали`, `Стандартные изделия`.
+
+```python
+rows = [
+    ('', '', 'Сборочные единицы и детали', '', ''),
+    ('1', 'ВЧ.01.00.001', 'Станина-шасси', '1', 'PETG'),
+    ('2', 'ВЧ.01.00.002', 'Карусель ягод (Барабан)', '1', 'PETG'),
+    ('3', 'ВЧ.01.00.003', 'Колесо мальтийского креста', '1', 'PETG'),
+    ('4', 'ВЧ.01.00.004', 'Колесо ведущее коническое', '1', 'PETG, z=16'),
+    ('5', 'ВЧ.01.00.005', 'Вал горизонт. с конич. колесом', '1', 'PETG, z=16'),
+    ('6', 'ВЧ.01.00.006', 'Шатун с головками SI3T/K', '1', 'L=85 мм, M3'),
+    ('', '', 'Стандартные изделия', '', ''),
+    ('13', '', 'Мотор-редуктор JGY-370', '1', '12В 30об/м'),
+    ('14', 'ГОСТ 8338-75', 'Подшипник 608ZZ (8x22x7)', '2', 'Сталь')
+]
+```
+
+### 5.4 Technical Requirements / Технические требования (ГОСТ 2.316-2008)
+- Placed directly above the BOM table or above the title block.
+- Width: **185 mm**.
+- Heading: **Технические требования:**.
+- Numbered items (dimensions for reference with `*`, material specs, lubricant, assembly limits).
+
+### 5.5 Dimensioning, Centerlines & The DPI Scaling Trap (ГОСТ 2.307-2011, ГОСТ 2.303-68)
+
+In headless FreeCAD scripting, native `TechDraw::DrawViewDimension` objects are fragile, require interactive edge/vertex selection indices that shift upon model recomputation, lack GOST arrowheads, and frequently cause crashes. The robust, production-tested method is to overlay a high-precision, vector-perfect SVG symbol via `TechDraw::DrawViewSymbol`.
+
+#### 5.5.1 TechDraw vs. SVG Coordinate System Mapping
+TechDraw drawing pages and SVG viewports use inverted vertical axes:
+- **TechDraw Page:** Origin $(0, 0)$ is at the **bottom-left corner**; $Y$ increases **upward**.
+- **SVG Viewport:** Origin $(0, 0)$ is at the **top-left corner**; $Y$ increases **downward**.
+
+To align SVG elements with a TechDraw view positioned at $(X_{td}, Y_{td})$ on a sheet of height $H_{sheet}$ (e.g., $297$ mm for A3, $594$ mm for A1):
+$$X_{svg} = X_{td}$$
+$$Y_{svg} = H_{sheet} - Y_{td}$$
+
+*Example on an A3 Landscape sheet ($420 \times 297$ mm):*
+- If `v_top.X = 135.0` and `v_top.Y = 85.0`, its center in SVG coordinates is:
+  $$X = 135.0,\quad Y = 297.0 - 85.0 = 212.0\text{ mm}$$
+- If `sec.X = 135.0` and `sec.Y = 210.0`, its center in SVG coordinates is:
+  $$X = 135.0,\quad Y = 297.0 - 210.0 = 87.0\text{ mm}$$
+
+#### 5.5.2 CRITICAL BUG: The 90 vs. 96 DPI Scaling & X-Shift Trap
+> [!CAUTION]
+> **THE TRAP:** When creating a full-sheet dimension overlay `<svg width="420mm" height="297mm" ...>`:
+> - Dimension lines, centerlines, and pitch circles appear **shifted along the X-axis** (by up to $4.7$ mm on an A3 sheet!) and slightly shrunken relative to the actual 3D model geometry.
+> - The further a feature is from the sheet center, the worse the alignment error.
+> 
+> **ROOT CAUSE:**
+> 1. Qt's `QSvgRenderer` parses physical millimeter units (`420mm`) using an internal standard of **90 DPI**:
+>    $$\text{Width in pixels} = \text{round}\left(\frac{420 \times 90}{25.4}\right) = 1488\text{ px}$$
+> 2. FreeCAD's TechDraw scenegraph then converts these pixels back to millimeters assuming standard screen **96 DPI**:
+>    $$\text{Perceived mm} = \frac{1488 \times 25.4}{96} = 393.7\text{ mm}$$
+> 3. Consequently, FreeCAD shrinks the entire SVG overlay by $\frac{393.7}{420.0} \approx 0.9373$ (a $6.27\%$ error!).
+> 4. When the symbol is centered at the page center $(X_c, Y_c)$, every coordinate $X$ suffers a displacement of $\Delta X = (X - X_c) \times (1 - 0.9373)$. At $X = 135$ mm on an A3 sheet ($X_c = 210$ mm), this produces a **$4.7$ mm horizontal shift**!
+
+**THE MATHEMATICAL SOLUTION:**
+Calculate and assign the exact inverse DPI scaling factor directly to the `DrawViewSymbol.Scale` property:
+
+```python
+# Universal formula for any standard sheet size:
+def get_symbol_scale_correction(sheet_width_mm):
+    qt_pixels = round(sheet_width_mm * 90.0 / 25.4)
+    freecad_mm = qt_pixels * 25.4 / 96.0
+    return sheet_width_mm / freecad_mm
+
+# For A3 Landscape (420 mm):
+# 420.0 / (1488 * 25.4 / 96.0) = 1.0668021336...
+sym_dim = doc.addObject('TechDraw::DrawViewSymbol', 'OverlayDimensions')
+sym_dim.Symbol = svg_dim
+page.addView(sym_dim)
+doc.recompute()
+
+sym_dim.Scale = get_symbol_scale_correction(420.0) # Eliminates the 6.27% shrinkage
+sym_dim.X = 210.0                                  # Center X of A3 sheet (420 / 2)
+sym_dim.Y = 148.5                                  # Center Y of A3 sheet (297 / 2)
+doc.recompute()
+```
+With this scale factor applied, $1.0\text{ mm}$ in SVG coordinates maps to **exactly $1.0\text{ mm}$ on the TechDraw sheet with zero offset across the entire page.**
+
+#### 5.5.3 GOST-Compliant SVG Dimension Elements & Styling
+In accordance with GOST 2.307-2011 (Dimensioning) and GOST 2.303-68 (Lines):
+
+1. **Line Weights & Styles:**
+   - Dimension lines (`dim-line`): thin continuous line, stroke width $0.35$ mm.
+   - Extension lines (`dim-ext`): thin continuous line, stroke width $0.25$ mm; extend $1.5\dots 2$ mm past dimension line.
+   - Centerlines (`center-line`): dash-dotted line, stroke width $0.25$ mm, pattern `stroke-dasharray="6,1.5,1.5,1.5"`; extend $2\dots 4$ mm past part contour.
+   - Arrowheads: acute closed filled triangle (length $3.5\dots 5$ mm, opening angle $\approx 15^\circ-20^\circ$).
+
+2. **Dimension Text & Typography:**
+   - Font: `font-family="osifont, Arial, sans-serif"`.
+   - Nominal height: $3.5$ mm (main dimensions), $2.5$ mm (tolerances / subscripts).
+   - Position: centered $1.0$ mm above the horizontal dimension line.
+   - For vertical dimensions: rotated $-90^\circ$ around text midpoint: `transform="rotate(-90 x y)"`.
+   - Diameter symbol: Unicode `Ø` (e.g. `Ø116`, `Ø22,1`).
+   - Tolerances: `<tspan font-size="2.4px" dy="-1.5px">+0,1</tspan>`.
+   - Reference dimensions: Asterisk `*` (e.g. `88*`, `Ø40*`), accompanied by note `1. * Размеры для справок.` in technical requirements.
+
+3. **Leader Lines & Callouts (Выноски):**
+   - Solid thin line with starting dot on the feature surface (`<marker id="dot">...`) and horizontal shelf under text:
+     `<path d="M x1 y1 L x2 y2 L x3 y2" class="leader" marker-start="url(#dot)" />`
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 420 297">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+    <path d="M 0 2 L 10 5 L 0 8 z" fill="#000" />
+  </marker>
+  <marker id="arrow-rev" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+    <path d="M 10 2 L 0 5 L 10 8 z" fill="#000" />
+  </marker>
+  <marker id="dot" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3" markerHeight="3">
+    <circle cx="5" cy="5" r="2.5" fill="#000" />
+  </marker>
+</defs>
+<style>
+  .dim-line { stroke: #000; stroke-width: 0.35; fill: none; }
+  .dim-ext { stroke: #000; stroke-width: 0.25; fill: none; }
+  .center-line { stroke: #000; stroke-width: 0.25; stroke-dasharray: 6,1.5,1.5,1.5; fill: none; }
+  .dim-text { font-family: osifont, Arial, sans-serif; font-size: 3.5px; fill: #000; text-anchor: middle; }
+  .leader { stroke: #000; stroke-width: 0.35; fill: none; }
+</style>
+
+<!-- Horizontal Linear / Diameter Dimension -->
+<line x1="77" y1="74" x2="77" y2="34" class="dim-ext" />
+<line x1="193" y1="74" x2="193" y2="34" class="dim-ext" />
+<line x1="77" y1="37" x2="193" y2="37" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="135" y="35.5" class="dim-text">Ø116</text>
+
+<!-- Vertical Dimension with Rotation -->
+<line x1="194" y1="75" x2="208" y2="75" class="dim-ext" />
+<line x1="194" y1="99" x2="208" y2="99" class="dim-ext" />
+<line x1="205" y1="75" x2="205" y2="99" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="203" y="87" transform="rotate(-90 203 87)" class="dim-text">24</text>
+
+<!-- Leader Callout with Dot and Shelf -->
+<path d="M 130.9 87 L 118 72 L 102 72" class="leader" marker-start="url(#dot)" />
+<text x="110" y="70.5" class="dim-text">Ø8,2</text>
+</svg>
+```
+
+#### 5.5.4 GOST-Compliant Dimensioning of Spherical Surfaces (ГОСТ 2.307-2011 п. 5.37)
+
+Spherical features require specific callout syntax and analytical coordinate calculation for SVG dimension overlays:
+
+1. **Callout Rules per GOST 2.307-2011 (п. 5.37):**
+   - **On views where the spherical surface projects as a circle (e.g. Top View):**
+     Indicate the diameter preceded by the word «сфера» (or circle symbol $\bigcirc$):
+     `6 лунок (сфера Ø26)`.
+     *(NEVER write just `6 лунок (сфера)` without diameter — omitting the diameter leaves the drawing underspecified!)*
+   - **On section views or projections where the spherical contour is shown as an arc:**
+     Indicate the radius preceded by the word «Сфера»: `Сфера R13`.
+   - **Depth of spherical pocket:**
+     Indicate the depth as an explicit linear dimension ($13$ mm) between the reference face ($Z = 24.0$) and the bottom/transition edge.
+
+2. **Analytical Anchor Coordinates for SVG Overlay Elements:**
+   Never approximate anchor coordinates by eye. Use the analytical circle equation:
+   $$(X - X_c)^2 + (Y - Y_c)^2 = R^2 \implies Y(X) = Y_c \pm \sqrt{R^2 - (X - X_c)^2}$$
+
+   - **Extension line for pocket depth (avoiding "floating" lines):**
+     If a through-hole of radius $r_{hole}$ is punched through the bottom of a spherical cavity of radius $R$:
+     The transition edge between sphere and hole is at:
+     $$X_{trans} = X_c - r_{hole}$$
+     $$Y_{trans} = Y_c + \sqrt{R^2 - r_{hole}^2}$$
+     *Example:* For $X_c = 91.0$, $Y_c = 75.0$, $R = 13.0$, $r_{hole} = 4.75$:
+     $$X_{trans} = 91.0 - 4.75 = 86.25\text{ mm}$$
+     *(Reusing $X = 83.0$ from an old conical pocket makes the extension line dangle in mid-air outside the part!)*
+     ```xml
+     <!-- Correct depth dimension tied to transition edge X = 86.25 -->
+     <line x1="77" y1="75" x2="65" y2="75" class="dim-ext" />
+     <line x1="86.25" y1="88" x2="65" y2="88" class="dim-ext" />
+     <line x1="68" y1="75" x2="68" y2="88" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+     <text x="66" y="81.5" transform="rotate(-90 66 81.5)" class="dim-text">13</text>
+     ```
+
+   - **Leader dot anchored precisely on the spherical arc:**
+     For $X_0 = 83.0$ on a sphere centered at $(91.0, 75.0)$ with $R = 13.0$:
+     $$Y_0 = 75.0 + \sqrt{13^2 - (83.0 - 91.0)^2} = 75.0 + \sqrt{169 - 64} = 75.0 + \sqrt{105} \approx 85.25\text{ mm}$$
+     ```xml
+     <!-- Leader line precisely anchored on spherical contour -->
+     <path d="M 83 85.25 L 66 96 L 40 96" class="leader" marker-start="url(#dot)" />
+     <text x="53" y="94.5" class="dim-text">Сфера R13</text>
+     ```
+
+### 5.6 Position Callouts & Balloons for Assemblies (ГОСТ 2.109-73)
+On assembly drawings, part positions are designated with numbered balloons linked to the BOM table:
+- **Balloon Geometry**: Circle $\varnothing 8-10$ mm with centered number (font height $5.0$ mm).
+- **Leader Line**: Stroke width $0.35$ mm, starting with a filled dot ($\varnothing 1.0$ mm) on the visible surface of the part, directed radially or obliquely to the balloon edge.
+- **Grouping**: Group balloons in rows or columns outside the part contours for visual clarity.
+
+---
+
+## 6. Exporting Drawings and Project Files (PDF and Native FCStd)
+
+### 6.1 PDF Export & Native FreeCAD Project Saving (FCStd)
+Do **not** export to SVG format — SVG export is completely unnecessary and generates redundant flat files that lose CAD parametric history.
+
+Engineering drawings must be exported to two official formats:
+1. **PDF (`TechDrawGui.exportPageAsPdf`)**: The standard format for 2D engineering drawings per GOST/ESKD (high-precision vector format ready for printing, archiving, and review).
+2. **FCStd (`doc.saveAs`)**: The native FreeCAD project file. It retains all 3D solid models, assembly compounds, constraints, and live TechDraw drawing sheets, allowing the full assembly and drawing to be opened, modified, or recomputed directly in the FreeCAD desktop application.
+
+```python
+import TechDrawGui
+
+# 1. Export 2D engineering drawing to PDF per GOST
+out_pdf = os.path.abspath("drawing.pdf")
+TechDrawGui.exportPageAsPdf(page, out_pdf)
+print(f"SUCCESS: PDF drawing exported to {out_pdf}")
+
+# 2. Save native FreeCAD project file (.FCStd)
+out_fcstd = os.path.abspath("drawing_output.FCStd")
+doc.saveAs(out_fcstd)
+print(f"SUCCESS: Project FreeCAD saved to {out_fcstd}")
+```
+
+---
+
+## 7. Complete Reference Script Template
+
+Copy, adapt, and run this complete working template for future engineering drawing tasks:
+
+```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+template_drawing.py - Headless FreeCAD GOST Drawing Generator
+"""
+import sys
+import os
+import math
+
+# 1. FreeCAD paths
+sys.path.append('/usr/lib/freecad/lib')
+sys.path.append('/usr/share/freecad/Mod/TechDraw')
+
+from PySide2 import QtWidgets, QtGui, QtSvg, QtCore
+
+# 2. Offscreen Qt initialization
+app = QtWidgets.QApplication.instance()
+if not app:
+    app = QtWidgets.QApplication(['FreeCAD', '-platform', 'offscreen'])
+
+import FreeCAD
+import FreeCADGui
+FreeCADGui.showMainWindow()
+
+import Part
+import TechDraw
+import TechDrawGui
+
+doc = FreeCAD.newDocument("GOST_Drawing")
+
+# 3. Create 3D Solid Geometry (Analytical B-Rep)
+b1 = Part.makeBox(120, 60, 40)
+# Overlap cylinder tool to prevent tangency errors
+c1 = Part.makeCylinder(15, 70, FreeCAD.Vector(60, 30, -5), FreeCAD.Vector(0, 0, 1))
+solid = b1.cut(c1)
+
+assert solid.isValid(), "Solid shape is topologically invalid!"
+
+part_feat = doc.addObject("Part::Feature", "Component")
+part_feat.Shape = solid
+doc.recompute()
+
+# 4. Create TechDraw Page
+page = doc.addObject('TechDraw::DrawPage', 'Page')
+template = doc.addObject('TechDraw::DrawSVGTemplate', 'Template')
+template.Template = '/usr/share/freecad/Mod/TechDraw/Templates/RU_GOST/Leading/Landscape_A3.svg'
+page.Template = template
+
+# 5. Add Orthogonal Views (Front & Top)
+# IMPORTANT: addView FIRST, set coordinates AFTER
+v_front = doc.addObject('TechDraw::DrawViewPart', 'FrontView')
+v_front.Source = [part_feat]
+v_front.Direction = (0.0, -1.0, 0.0)
+page.addView(v_front)
+doc.recompute()
+
+v_front.Scale = 1.0
+v_front.X = 140.0
+v_front.Y = 180.0
+v_front.IsoCount = 0
+
+v_top = doc.addObject('TechDraw::DrawViewPart', 'TopView')
+v_top.Source = [part_feat]
+v_top.Direction = (0.0, 0.0, 1.0)
+page.addView(v_top)
+doc.recompute()
+
+v_top.Scale = 1.0
+v_top.X = 140.0 # strictly aligned with FrontView on X
+v_top.Y = 80.0
+v_top.IsoCount = 0
+
+# 6. Fill GOST Title Block
+template.setEditFieldContent('Номер', 'ПР.01.00.001')
+template.setEditFieldContent('Название', 'Корпус механизма')
+template.setEditFieldContent('Масштаб', '1:1')
+template.setEditFieldContent('Лист', '1')
+template.setEditFieldContent('Листов', '1')
+template.setEditFieldContent('Разработал', 'Инженер')
+
+# 7. Add Technical Notes via DrawViewSymbol (safe UTF-8 Cyrillic)
+notes_svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="185mm" height="40mm" viewBox="0 0 185 40">
+<text x="5" y="10" font-family="osifont, Arial" font-size="3.5" font-weight="bold" fill="black">Технические требования:</text>
+<text x="5" y="20" font-family="osifont, Arial" font-size="3.2" fill="black">1. * Размеры для справок.</text>
+<text x="5" y="30" font-family="osifont, Arial" font-size="3.2" fill="black">2. Материал: PETG. Заполнение 50%.</text>
+</svg>'''
+sym_notes = doc.addObject('TechDraw::DrawViewSymbol', 'TechNotes')
+sym_notes.Symbol = notes_svg
+page.addView(sym_notes)
+doc.recompute()
+sym_notes.X = 325.0
+sym_notes.Y = 75.0
+
+doc.recompute()
+
+# 8. Export PDF and Native FreeCAD Project (FCStd)
+out_pdf = os.path.abspath("drawing_output.pdf")
+TechDrawGui.exportPageAsPdf(page, out_pdf)
+print(f"SUCCESS: Drawing PDF exported to {out_pdf}")
+
+out_fcstd = os.path.abspath("drawing_output.FCStd")
+doc.saveAs(out_fcstd)
+print(f"SUCCESS: Project FreeCAD saved to {out_fcstd}")
+
+print("Export completed successfully.")
+```
+
+---
+
+## 8. Common Pitfalls & Troubleshooting Checklist
+
+| Problem / Symptom | Root Cause | Verified Solution |
+|---|---|---|
+| `SIGABRT` or crash when importing `TechDrawGui` | Qt GUI application is not initialized in headless mode. | Initialize `QtWidgets.QApplication(['FreeCAD', '-platform', 'offscreen'])` before importing `FreeCADGui`. |
+| `exportPageAsPdf` does not create file (exits silently) | FreeCAD main window not attached to offscreen view provider (`page.ViewObject` is `None`). | Call `FreeCADGui.showMainWindow()` after initializing `QApplication`. |
+| `AttributeError: module 'TechDraw' has no attribute 'exportPageAsPdf'` | Export functions belong to GUI module in FreeCAD 0.19+. | Use `TechDrawGui.exportPageAsPdf(page, path)`. |
+| All views appear stacked on top of each other at sheet center | `page.addView(view)` resets `view.X` and `view.Y` to center coordinates. | Set `view.X` and `view.Y` **after** calling `page.addView(view)` and call `doc.recompute()`. |
+| Part completely disappears or vanishes from 2D TechDraw projection | Tangent/coincident boolean cuts caused non-manifold edges (`isValid() == False`). | Overlap all cutting tools by $\ge 0.5$ mm; verify `shape.isValid() == True` before adding to document. |
+| Cyrillic text appears as scrambled glyphs (mojibake) | `TechDraw::DrawViewAnnotation` splits UTF-8 into Latin-1. | Use `TechDraw::DrawViewSymbol` with embedded SVG markup and standard UTF-8 `<text>` tags. |
+| Faceted, stepped lines on round cylindrical faces | Geometry was imported from STL mesh or polygonal representation. | Build parts natively using exact `Part` B-Rep solids (`makeCylinder`, `makeBox`). |
+| Wrong angle or position when using `FreeCAD.Matrix` rotation | `matrix.rotateX/Y/Z()` expects angles in **radians**, not degrees. | Use `math.radians(degrees)` when setting matrix rotations. |
+| Slow rendering or out-of-memory during TechDraw HLR computation | Default `view.IsoCount` computes dozens of internal wireframe curves per surface. | Set `view.IsoCount = 0` on all `DrawViewPart` and `DrawViewSection` objects. |
+| Vertical section view (разрез) is inverted / upside-down relative to model | FreeCAD TechDraw section projection matrix maps $+Z$ downward depending on base view normal. | Set `sec.Rotation = 180.0` on the `DrawViewSection` object. |
+| Overlay dimensions, axes, and centerlines are shifted along X/Y axes | DPI mismatch: QtSvg parses physical mm at 90 DPI, while TechDraw calculates at 96 DPI ($6.27\%$ error). | Set `sym.Scale = W_mm / (round(W_mm * 90 / 25.4) * 25.4 / 96.0)` on the `DrawViewSymbol`. |
+| Hemispherical cavity cut causes `isValid() == False` or drops part in TechDraw | Equator of sphere is coplanar with top face, causing non-manifold tangent singularity at boundary. | Fuse sphere with an upward cylinder (`sph.fuse(cyl_up)`) of equal radius before cutting. |
+| Boolean cut fails or yields zero volume at $0^\circ$ on cylindrical/annular part | Parametric seam curve ($u=0$ along $+X$) of pre-existing groove collides with cutting tool. | Cut discrete radial features (pockets, holes) **before** cutting continuous revolved grooves. |
+| Extension line for spherical pocket depth hangs in mid-air | Reused $X$ coordinate from previous conical geometry without accounting for sphere transition. | Calculate transition coordinate analytically: $X_{trans} = X_c - r_{hole}$. |
+| Underspecified spherical callout on top view (e.g. `6 лунок (сфера)`) | Omission of diameter parameter required by GOST 2.307-2011 on projection views. | Always include diameter: `6 лунок (сфера Ø...)` on plan, and `Сфера R...` on section views. |
+| Need to edit or review drawing in FreeCAD desktop GUI | Only PDF was exported without saving the project. | Save native project via `doc.saveAs("drawing_output.FCStd")`. |
+| Horizontal overhanging bearing shoulder drooping or printing spaghetti in FDM | Cantilever cylindrical step protruding horizontally creates an unsupported $90^\circ$ ceiling in mid-air. | Make plastic boss face flush and use standard steel shim washer (DIN 988 / DIN 125) against bearing inner ring, or chamfer underside at $45^\circ$. |
+| Fastener mounting holes blocked by adjacent side blocks or stiffeners (wrench cannot reach) | Ribs or gusset blocks placed within the fastener vertical tool envelope. | Maintain unobstructed vertical line-of-sight cylinder above every fastener (for M4 counterbore: open radius $R \ge 6$ mm). |
+| 2D orthographic drawing cluttered with intersecting $45^\circ$ lines and phantom steps | Merged multiple separate ribs and side blocks at different depth planes. | Design monolithic uprights or a single continuous central stiffening rib so orthogonal silhouettes are clean and legible. |
+| Stepped shelf/ledge behind bolt boss blocking wrench or nut engagement | Stiffening rib terminated below boss summit, creating an inaccessible crevice around fastener axis. | Extend stiffener smoothly from top of boss down to flange, maintaining an open vertical envelope ($\ge 20$ mm for M8) for socket tool. |
+

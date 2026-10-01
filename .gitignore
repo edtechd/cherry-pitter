@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# FreeCAD project & backup files
+*.FCStd
+*.FCStd1
+*.FCMat
+*.brep
+
+# Heavy binary PDF and SVG vector exports
+*.pdf
+*.svg
+
+# Intermediate FEM mesh & solver output files
+*.inp
+*.frd
+*.dat
+*.sta
+*.cvg
+*.12d
+*.nam
+
+# Local editor and OS files
+.DS_Store
+.vscode/
+.idea/
