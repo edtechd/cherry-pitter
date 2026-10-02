@@ -41,11 +41,13 @@ HOLE_R = 1.7                        # Радиус отверстия М3 (Ø3.4
 
 # Опорный фланец крепления к станине
 FLANGE_W = 24.0             # Ширина фланца вдоль X (-12..+12)
-FLANGE_D = 16.0             # Длина фланца вдоль Y (0..16)
+FLANGE_D = 22.0             # Длина фланца вдоль Y (0..22)
 FLANGE_H = 5.0              # Толщина фланца вдоль Z (0..5)
 FLANGE_HOLE_X = 6.0         # Межосевое расстояние отверстий по X (±6.0 мм)
-FLANGE_HOLE_Y = 11.0        # Положение крепежных отверстий по Y
+FLANGE_HOLE_Y = 16.0        # Положение крепежных отверстий по Y (смещено дальше от стойки)
 FLANGE_HOLE_R = 1.7         # Отверстия под винты М3 (Ø3.4 мм)
+FLANGE_CB_R = 3.25          # Радиус цековки под головку винта DIN 912 M3 (Ø6.5 мм)
+FLANGE_CB_DEPTH = 3.0       # Глубина цековки под головку винта заподлицо (3.0 мм)
 
 def create_hopper_stand():
     """
@@ -66,10 +68,11 @@ def create_hopper_stand():
         
     # 4. Опорный монтажный фланец в основании
     flange = make_box(FLANGE_W, FLANGE_D, FLANGE_H, (-FLANGE_W / 2.0, 0.0, 0.0))
-    # Крепежные отверстия к станине
-    fh1 = make_cylinder(FLANGE_HOLE_R, FLANGE_H + 2.0, (-FLANGE_HOLE_X, FLANGE_HOLE_Y, -1.0))
-    fh2 = make_cylinder(FLANGE_HOLE_R, FLANGE_H + 2.0, (FLANGE_HOLE_X, FLANGE_HOLE_Y, -1.0))
-    flange = flange.cut(fh1).cut(fh2)
+    # Крепежные отверстия и цековки под винты М3 заподлицо
+    for hx in [-FLANGE_HOLE_X, FLANGE_HOLE_X]:
+        fh = make_cylinder(FLANGE_HOLE_R, FLANGE_H + 2.0, (hx, FLANGE_HOLE_Y, -1.0))
+        cb = make_cylinder(FLANGE_CB_R, FLANGE_CB_DEPTH + 1.0, (hx, FLANGE_HOLE_Y, FLANGE_H - FLANGE_CB_DEPTH))
+        flange = flange.cut(fh).cut(cb)
     
     # 5. Объединение фланца и стойки
     stand = flange.fuse(col)
@@ -177,14 +180,101 @@ def generate_stand_drawing():
     
     def f_x(x): return X_FRONT + x * SCALE
     def f_y(z): return (297.0 - Y_FRONT) - (z - 40.0) * SCALE
-    def s_x(y): return X_SIDE + (y - 8.0) * SCALE
+    def s_x(y): return X_SIDE + (y - 11.0) * SCALE
     def s_y(z): return (297.0 - Y_SIDE) - (z - 40.0) * SCALE
     def t_x(x): return X_TOP + x * SCALE
-    def t_y(y): return (297.0 - Y_TOP) - (y - 8.0) * SCALE
+    def t_y(y): return (297.0 - Y_TOP) - (y - 11.0) * SCALE
     
     qt_px = round(W_SHEET * 90.0 / 25.4)
     scale_corr = W_SHEET / (qt_px * 25.4 / 96.0)
     
+    # ==================== КОНТУРЫ ДЕТАЛИ ====================
+    # 1. FrontView контур
+    contour_front = f'''
+<path d="M {f_x(-12.0)} {f_y(0.0)}
+         L {f_x(12.0)} {f_y(0.0)}
+         L {f_x(12.0)} {f_y(5.0)}
+         L {f_x(8.0)} {f_y(5.0)}
+         L {f_x(8.0)} {f_y(80.0)}
+         L {f_x(5.0)} {f_y(80.0)}
+         L {f_x(5.0)} {f_y(5.0)}
+         L {f_x(-5.0)} {f_y(5.0)}
+         L {f_x(-5.0)} {f_y(80.0)}
+         L {f_x(-8.0)} {f_y(80.0)}
+         L {f_x(-8.0)} {f_y(5.0)}
+         L {f_x(-12.0)} {f_y(5.0)} Z" class="contour-line"/>
+<line x1="{f_x(-8.0)}" y1="{f_y(5.0)}" x2="{f_x(-5.0)}" y2="{f_y(5.0)}" class="contour-line"/>
+<line x1="{f_x(5.0)}" y1="{f_y(5.0)}" x2="{f_x(8.0)}" y2="{f_y(5.0)}" class="contour-line"/>
+<circle cx="{f_x(0.0)}" cy="{f_y(54.0)}" r="{HOLE_R * SCALE}" class="contour-line"/>
+<circle cx="{f_x(0.0)}" cy="{f_y(60.0)}" r="{HOLE_R * SCALE}" class="contour-line"/>
+<circle cx="{f_x(0.0)}" cy="{f_y(66.0)}" r="{HOLE_R * SCALE}" class="contour-line"/>
+
+<!-- Невидимые контуры цековок во фланце на виде спереди -->
+<line x1="{f_x(-FLANGE_HOLE_X - FLANGE_CB_R)}" y1="{f_y(5.0 - FLANGE_CB_DEPTH)}" x2="{f_x(-FLANGE_HOLE_X + FLANGE_CB_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{f_x(-FLANGE_HOLE_X - FLANGE_CB_R)}" y1="{f_y(5.0)}" x2="{f_x(-FLANGE_HOLE_X - FLANGE_CB_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{f_x(-FLANGE_HOLE_X + FLANGE_CB_R)}" y1="{f_y(5.0)}" x2="{f_x(-FLANGE_HOLE_X + FLANGE_CB_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{f_x(-FLANGE_HOLE_X - FLANGE_HOLE_R)}" y1="{f_y(0.0)}" x2="{f_x(-FLANGE_HOLE_X - FLANGE_HOLE_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{f_x(-FLANGE_HOLE_X + FLANGE_HOLE_R)}" y1="{f_y(0.0)}" x2="{f_x(-FLANGE_HOLE_X + FLANGE_HOLE_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+
+<line x1="{f_x(FLANGE_HOLE_X - FLANGE_CB_R)}" y1="{f_y(5.0 - FLANGE_CB_DEPTH)}" x2="{f_x(FLANGE_HOLE_X + FLANGE_CB_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{f_x(FLANGE_HOLE_X - FLANGE_CB_R)}" y1="{f_y(5.0)}" x2="{f_x(FLANGE_HOLE_X - FLANGE_CB_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{f_x(FLANGE_HOLE_X + FLANGE_CB_R)}" y1="{f_y(5.0)}" x2="{f_x(FLANGE_HOLE_X + FLANGE_CB_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{f_x(FLANGE_HOLE_X - FLANGE_HOLE_R)}" y1="{f_y(0.0)}" x2="{f_x(FLANGE_HOLE_X - FLANGE_HOLE_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{f_x(FLANGE_HOLE_X + FLANGE_HOLE_R)}" y1="{f_y(0.0)}" x2="{f_x(FLANGE_HOLE_X + FLANGE_HOLE_R)}" y2="{f_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+'''
+
+    # 2. SideView контур
+    contour_side = f'''
+<path d="M {s_x(0.0)} {s_y(0.0)}
+         L {s_x(FLANGE_D)} {s_y(0.0)}
+         L {s_x(FLANGE_D)} {s_y(5.0)}
+         L {s_x(STAND_D)} {s_y(5.0)}
+         L {s_x(STAND_D)} {s_y(80.0)}
+         L {s_x(0.0)} {s_y(80.0)} Z" class="contour-line"/>
+<line x1="{s_x(0.0)}" y1="{s_y(5.0)}" x2="{s_x(STAND_D)}" y2="{s_y(5.0)}" class="contour-line"/>
+<line x1="{s_x(SLOT_D)}" y1="{s_y(5.0)}" x2="{s_x(SLOT_D)}" y2="{s_y(80.0)}" class="contour-line"/>
+
+<!-- Отверстия регулировки в задней стенке на виде сбоку -->
+<line x1="{s_x(SLOT_D)}" y1="{s_y(54.0 - HOLE_R)}" x2="{s_x(STAND_D)}" y2="{s_y(54.0 - HOLE_R)}" class="hidden-line"/>
+<line x1="{s_x(SLOT_D)}" y1="{s_y(54.0 + HOLE_R)}" x2="{s_x(STAND_D)}" y2="{s_y(54.0 + HOLE_R)}" class="hidden-line"/>
+<line x1="{s_x(SLOT_D)}" y1="{s_y(60.0 - HOLE_R)}" x2="{s_x(STAND_D)}" y2="{s_y(60.0 - HOLE_R)}" class="hidden-line"/>
+<line x1="{s_x(SLOT_D)}" y1="{s_y(60.0 + HOLE_R)}" x2="{s_x(STAND_D)}" y2="{s_y(60.0 + HOLE_R)}" class="hidden-line"/>
+<line x1="{s_x(SLOT_D)}" y1="{s_y(66.0 - HOLE_R)}" x2="{s_x(STAND_D)}" y2="{s_y(66.0 - HOLE_R)}" class="hidden-line"/>
+<line x1="{s_x(SLOT_D)}" y1="{s_y(66.0 + HOLE_R)}" x2="{s_x(STAND_D)}" y2="{s_y(66.0 + HOLE_R)}" class="hidden-line"/>
+
+<!-- Цековка и сквозное отверстие во фланце на виде сбоку -->
+<line x1="{s_x(FLANGE_HOLE_Y - FLANGE_CB_R)}" y1="{s_y(5.0 - FLANGE_CB_DEPTH)}" x2="{s_x(FLANGE_HOLE_Y + FLANGE_CB_R)}" y2="{s_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{s_x(FLANGE_HOLE_Y - FLANGE_CB_R)}" y1="{s_y(5.0)}" x2="{s_x(FLANGE_HOLE_Y - FLANGE_CB_R)}" y2="{s_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{s_x(FLANGE_HOLE_Y + FLANGE_CB_R)}" y1="{s_y(5.0)}" x2="{s_x(FLANGE_HOLE_Y + FLANGE_CB_R)}" y2="{s_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{s_x(FLANGE_HOLE_Y - FLANGE_HOLE_R)}" y1="{s_y(0.0)}" x2="{s_x(FLANGE_HOLE_Y - FLANGE_HOLE_R)}" y2="{s_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{s_x(FLANGE_HOLE_Y + FLANGE_HOLE_R)}" y1="{s_y(0.0)}" x2="{s_x(FLANGE_HOLE_Y + FLANGE_HOLE_R)}" y2="{s_y(5.0 - FLANGE_CB_DEPTH)}" class="hidden-line"/>
+<line x1="{s_x(FLANGE_HOLE_Y)}" y1="{s_y(0.0) - 3}" x2="{s_x(FLANGE_HOLE_Y)}" y2="{s_y(5.0) + 3}" class="center-line"/>
+'''
+
+    # 3. TopView контур
+    contour_top = f'''
+<rect x="{t_x(-FLANGE_W / 2.0)}" y="{t_y(FLANGE_D)}" width="{FLANGE_W * SCALE}" height="{FLANGE_D * SCALE}" class="contour-line"/>
+<path d="M {t_x(-STAND_W / 2.0)} {t_y(0.0)}
+         L {t_x(STAND_W / 2.0)} {t_y(0.0)}
+         L {t_x(STAND_W / 2.0)} {t_y(STAND_D)}
+         L {t_x(-STAND_W / 2.0)} {t_y(STAND_D)} Z" class="contour-line"/>
+<path d="M {t_x(-SLOT_W / 2.0)} {t_y(0.0)}
+         L {t_x(SLOT_W / 2.0)} {t_y(0.0)}
+         L {t_x(SLOT_W / 2.0)} {t_y(SLOT_D)}
+         L {t_x(-SLOT_W / 2.0)} {t_y(SLOT_D)} Z" class="contour-line"/>
+
+<!-- Отверстия Ø3.4 и цековки Ø6.5 на виде сверху -->
+<circle cx="{t_x(-FLANGE_HOLE_X)}" cy="{t_y(FLANGE_HOLE_Y)}" r="{FLANGE_HOLE_R * SCALE}" class="contour-line"/>
+<circle cx="{t_x(-FLANGE_HOLE_X)}" cy="{t_y(FLANGE_HOLE_Y)}" r="{FLANGE_CB_R * SCALE}" class="contour-line"/>
+<line x1="{t_x(-FLANGE_HOLE_X) - 5}" y1="{t_y(FLANGE_HOLE_Y)}" x2="{t_x(-FLANGE_HOLE_X) + 5}" y2="{t_y(FLANGE_HOLE_Y)}" class="center-line"/>
+<line x1="{t_x(-FLANGE_HOLE_X)}" y1="{t_y(FLANGE_HOLE_Y) - 5}" x2="{t_x(-FLANGE_HOLE_X)}" y2="{t_y(FLANGE_HOLE_Y) + 5}" class="center-line"/>
+
+<circle cx="{t_x(FLANGE_HOLE_X)}" cy="{t_y(FLANGE_HOLE_Y)}" r="{FLANGE_HOLE_R * SCALE}" class="contour-line"/>
+<circle cx="{t_x(FLANGE_HOLE_X)}" cy="{t_y(FLANGE_HOLE_Y)}" r="{FLANGE_CB_R * SCALE}" class="contour-line"/>
+<line x1="{t_x(FLANGE_HOLE_X) - 5}" y1="{t_y(FLANGE_HOLE_Y)}" x2="{t_x(FLANGE_HOLE_X) + 5}" y2="{t_y(FLANGE_HOLE_Y)}" class="center-line"/>
+<line x1="{t_x(FLANGE_HOLE_X)}" y1="{t_y(FLANGE_HOLE_Y) - 5}" x2="{t_x(FLANGE_HOLE_X)}" y2="{t_y(FLANGE_HOLE_Y) + 5}" class="center-line"/>
+'''
+
     # Размеры на Главном виде
     dim_h80 = f'''
 <line x1="{f_x(-12.0) - 4}" y1="{f_y(0.0)}" x2="{f_x(-12.0) - 22}" y2="{f_y(0.0)}" class="dim-ext"/>
@@ -237,30 +327,43 @@ def generate_stand_drawing():
 <line x1="{s_x(5.0)}" y1="{s_y(80.0) - 10}" x2="{s_x(10.0)}" y2="{s_y(80.0) - 10}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
 <text x="{s_x(7.5)}" y="{s_y(80.0) - 11.5}" class="dim-text">5</text>
 
+<!-- Положение отверстий 16 (ближе к детали) -->
 <line x1="{s_x(0.0)}" y1="{s_y(0.0) + 2}" x2="{s_x(0.0)}" y2="{s_y(0.0) + 14}" class="dim-ext"/>
-<line x1="{s_x(16.0)}" y1="{s_y(0.0) + 2}" x2="{s_x(16.0)}" y2="{s_y(0.0) + 14}" class="dim-ext"/>
-<line x1="{s_x(0.0)}" y1="{s_y(0.0) + 10}" x2="{s_x(16.0)}" y2="{s_y(0.0) + 10}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
-<text x="{s_x(8.0)}" y="{s_y(0.0) + 8.5}" class="dim-text">16</text>
+<line x1="{s_x(FLANGE_HOLE_Y)}" y1="{s_y(0.0) + 2}" x2="{s_x(FLANGE_HOLE_Y)}" y2="{s_y(0.0) + 14}" class="dim-ext"/>
+<line x1="{s_x(0.0)}" y1="{s_y(0.0) + 10}" x2="{s_x(FLANGE_HOLE_Y)}" y2="{s_y(0.0) + 10}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
+<text x="{s_x(FLANGE_HOLE_Y / 2.0)}" y="{s_y(0.0) + 8.5}" class="dim-text">{int(FLANGE_HOLE_Y)}</text>
 
-<line x1="{s_x(11.0)}" y1="{s_y(0.0) + 2}" x2="{s_x(11.0)}" y2="{s_y(0.0) + 22}" class="dim-ext"/>
-<line x1="{s_x(0.0)}" y1="{s_y(0.0) + 18}" x2="{s_x(11.0)}" y2="{s_y(0.0) + 18}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
-<text x="{s_x(5.5)}" y="{s_y(0.0) + 16.5}" class="dim-text">11</text>
+<!-- Габарит фланца 22 (дальше от детали) -->
+<line x1="{s_x(0.0)}" y1="{s_y(0.0) + 2}" x2="{s_x(0.0)}" y2="{s_y(0.0) + 22}" class="dim-ext"/>
+<line x1="{s_x(FLANGE_D)}" y1="{s_y(0.0) + 2}" x2="{s_x(FLANGE_D)}" y2="{s_y(0.0) + 22}" class="dim-ext"/>
+<line x1="{s_x(0.0)}" y1="{s_y(0.0) + 18}" x2="{s_x(FLANGE_D)}" y2="{s_y(0.0) + 18}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
+<text x="{s_x(FLANGE_D / 2.0)}" y="{s_y(0.0) + 16.5}" class="dim-text">{int(FLANGE_D)}</text>
+
+<!-- Размер глубины цековки 3 мм на виде сбоку -->
+<line x1="{s_x(FLANGE_HOLE_Y + FLANGE_CB_R)}" y1="{s_y(5.0 - FLANGE_CB_DEPTH)}" x2="{s_x(FLANGE_D) + 7}" y2="{s_y(5.0 - FLANGE_CB_DEPTH)}" class="dim-ext"/>
+<line x1="{s_x(FLANGE_D)}" y1="{s_y(5.0)}" x2="{s_x(FLANGE_D) + 7}" y2="{s_y(5.0)}" class="dim-ext"/>
+<line x1="{s_x(FLANGE_D) + 4}" y1="{s_y(5.0 - FLANGE_CB_DEPTH)}" x2="{s_x(FLANGE_D) + 4}" y2="{s_y(5.0)}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
+<text x="{s_x(FLANGE_D) + 6}" y="{(s_y(5.0 - FLANGE_CB_DEPTH) + s_y(5.0)) / 2 + 1.2}" class="dim-text-l">{int(FLANGE_CB_DEPTH)}</text>
 '''
 
     # Размеры на Виде сверху
     dim_top = f'''
-<line x1="{t_x(-12.0)}" y1="{t_y(16.0) + 2}" x2="{t_x(-12.0)}" y2="{t_y(16.0) + 18}" class="dim-ext"/>
-<line x1="{t_x(12.0)}" y1="{t_y(16.0) + 2}" x2="{t_x(12.0)}" y2="{t_y(16.0) + 18}" class="dim-ext"/>
-<line x1="{t_x(-12.0)}" y1="{t_y(16.0) + 14}" x2="{t_x(12.0)}" y2="{t_y(16.0) + 14}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
-<text x="{t_x(0.0)}" y="{t_y(16.0) + 12.5}" class="dim-text">24</text>
+<!-- Межосевое расстояние отверстий 12 (ближе к детали, над фланцем) -->
+<line x1="{t_x(-FLANGE_HOLE_X)}" y1="{t_y(FLANGE_HOLE_Y) - 4}" x2="{t_x(-FLANGE_HOLE_X)}" y2="{t_y(FLANGE_D) - 10}" class="dim-ext"/>
+<line x1="{t_x(FLANGE_HOLE_X)}" y1="{t_y(FLANGE_HOLE_Y) - 4}" x2="{t_x(FLANGE_HOLE_X)}" y2="{t_y(FLANGE_D) - 10}" class="dim-ext"/>
+<line x1="{t_x(-FLANGE_HOLE_X)}" y1="{t_y(FLANGE_D) - 7}" x2="{t_x(FLANGE_HOLE_X)}" y2="{t_y(FLANGE_D) - 7}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
+<text x="{t_x(0.0)}" y="{t_y(FLANGE_D) - 8.5}" class="dim-text">{int(FLANGE_HOLE_X * 2)}</text>
 
-<line x1="{t_x(-6.0)}" y1="{t_y(11.0)}" x2="{t_x(-6.0)}" y2="{t_y(16.0) + 10}" class="dim-ext"/>
-<line x1="{t_x(6.0)}" y1="{t_y(11.0)}" x2="{t_x(6.0)}" y2="{t_y(16.0) + 10}" class="dim-ext"/>
-<line x1="{t_x(-6.0)}" y1="{t_y(16.0) + 7}" x2="{t_x(6.0)}" y2="{t_y(16.0) + 7}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
-<text x="{t_x(0.0)}" y="{t_y(16.0) + 5.5}" class="dim-text">12</text>
+<!-- Ширина фланца 24 (дальше от детали) -->
+<line x1="{t_x(-FLANGE_W / 2.0)}" y1="{t_y(FLANGE_D) - 2}" x2="{t_x(-FLANGE_W / 2.0)}" y2="{t_y(FLANGE_D) - 18}" class="dim-ext"/>
+<line x1="{t_x(FLANGE_W / 2.0)}" y1="{t_y(FLANGE_D) - 2}" x2="{t_x(FLANGE_W / 2.0)}" y2="{t_y(FLANGE_D) - 18}" class="dim-ext"/>
+<line x1="{t_x(-FLANGE_W / 2.0)}" y1="{t_y(FLANGE_D) - 14}" x2="{t_x(FLANGE_W / 2.0)}" y2="{t_y(FLANGE_D) - 14}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)"/>
+<text x="{t_x(0.0)}" y="{t_y(FLANGE_D) - 15.5}" class="dim-text">{int(FLANGE_W)}</text>
 
-<path d="M {t_x(6.0)} {t_y(11.0)} L {t_x(6.0) + 18} {t_y(11.0) - 10} L {t_x(6.0) + 54} {t_y(11.0) - 10}" class="leader" marker-start="url(#dot)"/>
-<text x="{t_x(6.0) + 20}" y="{t_y(11.0) - 11.5}" class="dim-text-l" font-size="3.2">2 отв. Ø3,4</text>
+<!-- Выноска крепежных отверстий с цековкой -->
+<path d="M {t_x(FLANGE_HOLE_X)} {t_y(FLANGE_HOLE_Y)} L {t_x(FLANGE_HOLE_X) + 16} {t_y(FLANGE_HOLE_Y) + 6} L {t_x(FLANGE_HOLE_X) + 62} {t_y(FLANGE_HOLE_Y) + 6}" class="leader" marker-start="url(#dot)"/>
+<text x="{t_x(FLANGE_HOLE_X) + 18}" y="{t_y(FLANGE_HOLE_Y) + 4.0}" class="dim-text-l" font-size="3.2">2 отв. Ø3,4</text>
+<text x="{t_x(FLANGE_HOLE_X) + 18}" y="{t_y(FLANGE_HOLE_Y) + 9.5}" class="dim-text-l" font-size="3.2">цек. Ø6,5 глуб. 3</text>
 '''
 
     # Технические требования
@@ -270,7 +373,7 @@ def generate_stand_drawing():
 <text x="230" y="165" font-family="osifont, Arial, sans-serif" font-size="3.2" fill="#000">2. Материал: PETG. Заполнение не менее 40%.</text>
 <text x="230" y="172" font-family="osifont, Arial, sans-serif" font-size="3.2" fill="#000">3. П-образный паз шириной 10 мм обеспечивает вертикальное направление уха бункера.</text>
 <text x="230" y="179" font-family="osifont, Arial, sans-serif" font-size="3.2" fill="#000">4. Отверстия М3 на высотах 54, 60, 66 мм соответствуют зазорам до ротора 4, 10, 16 мм.</text>
-<text x="230" y="186" font-family="osifont, Arial, sans-serif" font-size="3.2" fill="#000">5. Крепление стойки к станине: 2 винта М3 через отверстия во фланце.</text>
+<text x="230" y="186" font-family="osifont, Arial, sans-serif" font-size="3.2" fill="#000">5. Крепление стойки к станине: 2 винта DIN 912 M3 с цековкой заподлицо во фланце.</text>
 '''
 
     svg_overlay = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W_SHEET}mm" height="{H_SHEET}mm" viewBox="0 0 {W_SHEET} {H_SHEET}">
@@ -286,13 +389,15 @@ def generate_stand_drawing():
   </marker>
 </defs>
 <style>
-  .dim-line   {{ stroke:#000; stroke-width:0.35; fill:none; }}
-  .dim-ext    {{ stroke:#000; stroke-width:0.25; fill:none; }}
-  .center-line{{ stroke:#000; stroke-width:0.25; stroke-dasharray:6,1.5,1.5,1.5; fill:none; }}
-  .dim-text   {{ font-family:osifont,Arial,sans-serif; font-size:3.5px; fill:#000; text-anchor:middle; }}
-  .dim-text-l {{ font-family:osifont,Arial,sans-serif; font-size:3.5px; fill:#000; text-anchor:start; }}
-  .view-title {{ font-family:osifont,Arial,sans-serif; font-size:5.0px; fill:#000; text-anchor:middle; font-weight:bold; }}
-  .leader     {{ stroke:#000; stroke-width:0.35; fill:none; }}
+  .contour-line {{ stroke:#000; stroke-width:0.5; fill:none; }}
+  .hidden-line  {{ stroke:#000; stroke-width:0.25; stroke-dasharray:2.5,1.2; fill:none; }}
+  .dim-line     {{ stroke:#000; stroke-width:0.35; fill:none; }}
+  .dim-ext      {{ stroke:#000; stroke-width:0.25; fill:none; }}
+  .center-line  {{ stroke:#000; stroke-width:0.25; stroke-dasharray:6,1.5,1.5,1.5; fill:none; }}
+  .dim-text     {{ font-family:osifont,Arial,sans-serif; font-size:3.5px; fill:#000; text-anchor:middle; }}
+  .dim-text-l   {{ font-family:osifont,Arial,sans-serif; font-size:3.5px; fill:#000; text-anchor:start; }}
+  .view-title   {{ font-family:osifont,Arial,sans-serif; font-size:5.0px; fill:#000; text-anchor:middle; font-weight:bold; }}
+  .leader       {{ stroke:#000; stroke-width:0.35; fill:none; }}
 </style>
 
 <!-- Осевые линии -->
@@ -305,10 +410,12 @@ def generate_stand_drawing():
 <line x1="{s_x(4.0)}" y1="{s_y(60.0)}" x2="{s_x(11.0)}" y2="{s_y(60.0)}" class="center-line"/>
 <line x1="{s_x(4.0)}" y1="{s_y(66.0)}" x2="{s_x(11.0)}" y2="{s_y(66.0)}" class="center-line"/>
 
-<line x1="{t_x(0.0)}" y1="{t_y(0.0) - 6}" x2="{t_x(0.0)}" y2="{t_y(16.0) + 6}" class="center-line"/>
-<line x1="{t_x(-12.0) - 6}" y1="{t_y(11.0)}" x2="{t_x(12.0) + 6}" y2="{t_y(11.0)}" class="center-line"/>
-<line x1="{t_x(-6.0)}" y1="{t_y(11.0) - 6}" x2="{t_x(-6.0)}" y2="{t_y(11.0) + 6}" class="center-line"/>
-<line x1="{t_x(6.0)}" y1="{t_y(11.0) - 6}" x2="{t_x(6.0)}" y2="{t_y(11.0) + 6}" class="center-line"/>
+<line x1="{t_x(0.0)}" y1="{t_y(0.0) - 6}" x2="{t_x(0.0)}" y2="{t_y(FLANGE_D) + 6}" class="center-line"/>
+
+<!-- Контуры деталей -->
+{contour_front}
+{contour_side}
+{contour_top}
 
 <!-- Размеры -->
 {dim_h80}

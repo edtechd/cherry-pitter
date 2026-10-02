@@ -41,21 +41,21 @@ def create_stripper_guide():
     Создает аналитический B-Rep солид стойки для направляющей рельсы MGN9-100:
     - Нижний фланец крепления к плите основания: 60.0 x 28.0 x 10.0 мм (Z in [0, 10.0]);
       Крепежные отверстия 2x Ø4.5 мм под винты M4 при X = ±23.0, Y = -8.0 (межцентровое 46.0 мм);
-    - Нижнее тело стойки: 32.0 x 26.0 x 35.0 мм (Z in [0, 35.0], X in [-16, 16], Y in [-18, +8]);
-    - Верхнее тело стойки: 32.0 x 18.0 x 100.0 мм (Z in [35.0, 135.0], X in [-16, 16], Y in [-18, 0]);
-      На высоте Z = 35.0 мм образуется опорная горизонтальная ступенька («полочка»)
+    - Нижнее тело стойки: 32.0 x 26.0 x 43.0 мм (Z in [0, 43.0], X in [-16, 16], Y in [-18, +8]);
+    - Верхнее тело стойки: 32.0 x 18.0 x 100.0 мм (Z in [43.0, 143.0], X in [-16, 16], Y in [-18, 0]);
+      На высоте Z = 43.0 мм образуется опорная горизонтальная ступенька («полочка»)
       шириной 32.0 мм и глубиной 8.0 мм под торец рельса MGN9-100;
     - 5 глухих крепежных отверстий M3 (Ø2.5 мм, глубина 10.0 мм) вдоль оси X = 0.0 на плоскости Y = 0.0
-      на высотах Z in {42.5, 62.5, 82.5, 102.5, 122.5} мм (E = 7.5 мм от ступеньки, шаг P = 20.0 мм).
+      на высотах Z in {50.5, 70.5, 90.5, 110.5, 130.5} мм (E = 7.5 мм от ступеньки, шаг P = 20.0 мм).
     """
     # 1. Опорный базовый фланец (ширина 60.0 мм)
     flange = make_box(60.0, 28.0, 10.0, (-30.0, -20.0, 0))
 
-    # 2. Нижнее тело стойки под ступеньку (Z in [0, 35.0])
-    col_lower = make_box(32.0, 26.0, 35.0, (-16.0, -18.0, 0))
+    # 2. Нижнее тело стойки под ступеньку (Z in [0, 43.0])
+    col_lower = make_box(32.0, 26.0, 43.0, (-16.0, -18.0, 0))
 
-    # 3. Верхнее тело стойки (Z in [35.0, 135.0])
-    col_upper = make_box(32.0, 18.0, 100.0, (-16.0, -18.0, 35.0))
+    # 3. Верхнее тело стойки (Z in [43.0, 143.0])
+    col_upper = make_box(32.0, 18.0, 100.0, (-16.0, -18.0, 43.0))
 
     tower = flange.fuse(col_lower).fuse(col_upper)
 
@@ -66,17 +66,17 @@ def create_stripper_guide():
     # 5. 5 крепежных отверстий под рельс MGN9-100 (M3 глубина 10 мм, сверло Ø2.5 мм)
     # Отверстия сверлятся в лицевую плоскость Y = 0.0 по направлению -Y
     for dz in [7.5, 27.5, 47.5, 67.5, 87.5]:
-        z = 35.0 + dz
+        z = 43.0 + dz
         hole = Part.makeCylinder(1.25, 12.0, FreeCAD.Vector(0.0, 1.0, z), FreeCAD.Vector(0, -1, 0))
         tower = tower.cut(hole)
 
-    # 6. 2 сквозных крепежных отверстия под съемник ягод ВЧ.01.00.015 (Z = 48.0 мм, X = ±10.0 мм)
+    # 6. 2 сквозных крепежных отверстия под съемник ягод ВЧ.01.00.015 (Z = 56.0 мм, X = ±10.0 мм)
     # Сквозные отверстия Ø3.4 мм через всю стенку 18 мм (от Y = 0.0 до Y = -18.0 мм)
     # с цековками Ø6.5 мм глубиной 4.0 мм со стороны задней стенки (Y = -18.0 мм)
     # под головки винтов DIN 912 M3 или гайки M3 (утоплены заподлицо)
     for x in [-10.0, 10.0]:
-        thru_h = Part.makeCylinder(1.7, 22.0, FreeCAD.Vector(x, 1.0, 48.0), FreeCAD.Vector(0, -1, 0))
-        cb_rear = Part.makeCylinder(3.25, 5.0, FreeCAD.Vector(x, -19.0, 48.0), FreeCAD.Vector(0, 1, 0))
+        thru_h = Part.makeCylinder(1.7, 22.0, FreeCAD.Vector(x, 1.0, 56.0), FreeCAD.Vector(0, -1, 0))
+        cb_rear = Part.makeCylinder(3.25, 5.0, FreeCAD.Vector(x, -19.0, 56.0), FreeCAD.Vector(0, 1, 0))
         tower = tower.cut(thru_h).cut(cb_rear)
 
     if not tower.isValid():
@@ -115,10 +115,10 @@ def generate_stripper_guide_drawing(part_name="part_stripper_guide",
 
     # Координаты проекций на формате А3 (420 x 297 мм)
     x_front = 95.0
-    y_front_td = 175.0   # SVG Y = 122.0
+    y_front_td = 179.0   # SVG Y = 118.0, базовая опорная линия Y = 189.5
 
     x_sec = 210.0
-    y_sec_td = 175.0     # SVG Y = 122.0 (в проекционной связи по горизонтали)
+    y_sec_td = 179.0     # SVG Y = 118.0 (в проекционной связи по горизонтали)
 
     x_top = 95.0
     y_top_td = 55.0      # SVG Y = 242.0
@@ -177,35 +177,36 @@ def generate_stripper_guide_drawing(part_name="part_stripper_guide",
         notes = [
             "1. * Размеры для справок.",
             "2. Стойка предназначена для установки рельса линейной направляющей MGN9-100.",
-            "3. Ступенька на высоте 35,0 мм служит опорной базой для нижнего торца рельса.",
+            "3. Ступенька на высоте 43,0 мм служит опорной базой для нижнего торца рельса.",
             "4. Резьба 5xM3 в отверстиях стойки нарезается метчиком (глубина 10 мм).",
-            "5. Крепление съемника ягод ВЧ.01.00.015: 2 сквозных отв. Ø3,4 мм с цековками Ø6,5 глуб. 4,0 мм на задней стенке (Z=48, межосевое 20 мм).",
+            "5. Крепление съемника ягод ВЧ.01.00.015: 2 сквозных отв. Ø3,4 мм с цековками Ø6,5 глуб. 4,0 мм",
+            "   на задней стенке (Z=56, межосевое 20 мм).",
             "6. Крепление к станине: 2 винта M4 (поз. 17), расстояние между осями 46 мм.",
             "7. Материал: PETG. Заполнение не менее 50%, количество периметров — не менее 4.",
             "8. Неуказанные предельные отклонения: ±IT14/2. Острые кромки притупить R 0.5."
         ]
 
-    notes_lines = ['<text x="245" y="85" font-family="osifont, Arial, sans-serif" font-size="3.6px" font-weight="bold" fill="#000">Технические требования:</text>']
+    notes_lines = ['<text x="245" y="85" font-family="osifont, Arial, sans-serif" font-size="3.5px" font-weight="bold" fill="#000">Технические требования:</text>']
     for idx, line in enumerate(notes):
-        notes_lines.append(f'<text x="245" y="{92 + idx * 5.6}" font-family="osifont, Arial, sans-serif" font-size="3.1px" fill="#000">{line}</text>')
+        notes_lines.append(f'<text x="245" y="{91.5 + idx * 5.2}" font-family="osifont, Arial, sans-serif" font-size="3.0px" fill="#000">{line}</text>')
     notes_svg = '\n'.join(notes_lines)
 
     # Генерация тонких линий штриховки под углом 45° по ГОСТ 2.305
     def generate_hatch_lines():
         def in_cut_face(x, y):
-            if y < 54.5 or y > 189.5:
+            if y < 46.5 or y > 189.5:
                 return False
             if y >= 179.5:      # Фланец: X in [196.0, 224.0]
                 if not (196.0 <= x <= 224.0):
                     return False
-            elif y >= 154.5:    # Нижнее тело стойки: X in [196.0, 222.0]
+            elif y >= 146.5:    # Нижнее тело стойки: X in [196.0, 222.0]
                 if not (196.0 <= x <= 222.0):
                     return False
             else:               # Верхнее тело стойки: X in [204.0, 222.0]
                 if not (204.0 <= x <= 222.0):
                     return False
                 # Обход 5 крепежных отверстий
-                for yc in [67.0, 87.0, 107.0, 127.0, 147.0]:
+                for yc in [59.0, 79.0, 99.0, 119.0, 139.0]:
                     if abs(y - yc) <= 1.25 and 204.0 <= x <= 214.0:
                         return False
                     if abs(y - yc) <= 1.25 and 214.0 < x <= 214.7:
@@ -214,7 +215,7 @@ def generate_stripper_guide_drawing(part_name="part_stripper_guide",
             return True
 
         lines = []
-        for c in [i * 3.0 for i in range(80, 145)]:
+        for c in [i * 3.0 for i in range(75, 145)]:
             xs = [196.0 + j * 0.1 for j in range(int((225.0 - 196.0) / 0.1))]
             cur_seg = []
             for x in xs:
@@ -237,7 +238,7 @@ def generate_stripper_guide_drawing(part_name="part_stripper_guide",
 
     # Отрисовка геометрии 5 резьбовых отверстий в разрезе
     holes_svg_lines = []
-    for yc in [67.0, 87.0, 107.0, 127.0, 147.0]:
+    for yc in [59.0, 79.0, 99.0, 119.0, 139.0]:
         y_top = yc - 1.25
         y_bot = yc + 1.25
         holes_svg_lines.append(f'''
@@ -280,24 +281,24 @@ def generate_stripper_guide_drawing(part_name="part_stripper_guide",
 
 <!-- ==================== ВИД СПЕРЕДИ (FrontView) ==================== -->
 <!-- Осевая линия стойки X = 95.0 -->
-<line x1="95" y1="48" x2="95" y2="195" class="center-line" />
+<line x1="95" y1="40" x2="95" y2="195" class="center-line" />
 
-<!-- 1. Габаритная высота 135* слева (X = 42) -->
-<line x1="65" y1="189.5" x2="40" y2="189.5" class="dim-ext" />
-<line x1="79" y1="54.5" x2="40" y2="54.5" class="dim-ext" />
-<line x1="43" y1="189.5" x2="43" y2="54.5" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="41" y="122" transform="rotate(-90 41 122)" class="dim-text">135*</text>
+<!-- 1. Габаритная высота 143* слева (X = 33) -->
+<line x1="65" y1="189.5" x2="30" y2="189.5" class="dim-ext" />
+<line x1="79" y1="46.5" x2="30" y2="46.5" class="dim-ext" />
+<line x1="33" y1="189.5" x2="33" y2="46.5" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="31" y="80" transform="rotate(-90 31 80)" class="dim-text">143*</text>
 
-<!-- 2. Высота ступеньки 35* слева (X = 52) -->
-<line x1="79" y1="154.5" x2="50" y2="154.5" class="dim-ext" />
-<line x1="53" y1="189.5" x2="53" y2="154.5" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="51" y="172" transform="rotate(-90 51 172)" class="dim-text">35*</text>
+<!-- 2. Высота ступеньки 43* слева (X = 48) -->
+<line x1="79" y1="146.5" x2="45" y2="146.5" class="dim-ext" />
+<line x1="48" y1="189.5" x2="48" y2="146.5" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="46" y="168" transform="rotate(-90 46 168)" class="dim-text">43*</text>
 
 <!-- 3. Ширина стойки 32 сверху -->
-<line x1="79" y1="54.5" x2="79" y2="44" class="dim-ext" />
-<line x1="111" y1="54.5" x2="111" y2="44" class="dim-ext" />
-<line x1="79" y1="46" x2="111" y2="46" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="95" y="44.5" class="dim-text">32</text>
+<line x1="79" y1="46.5" x2="79" y2="36" class="dim-ext" />
+<line x1="111" y1="46.5" x2="111" y2="36" class="dim-ext" />
+<line x1="79" y1="38" x2="111" y2="38" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="95" y="36.5" class="dim-text">32</text>
 
 <!-- 4. Ширина фланца 60 снизу -->
 <line x1="65" y1="189.5" x2="65" y2="201" class="dim-ext" />
@@ -316,25 +317,25 @@ def generate_stripper_guide_drawing(part_name="part_stripper_guide",
 <text x="145" y="183.0" class="dim-text">2 отв. Ø4,5</text>
 
 <!-- 6b. Выноска отверстий крепления съемника 2 отв. Ø3,4 насквозь слева -->
-<path d="M 85 141.5 L 68 135 L 30 135" class="leader" marker-start="url(#dot)" />
-<text x="50" y="133.5" class="dim-text">2 отв. Ø3,4 насквозь; цек. Ø6,5</text>
+<path d="M 85 133.5 L 75 126 L 45 126" class="leader" marker-start="url(#dot)" />
+<text x="65" y="124.5" class="dim-text">2 отв. Ø3,4 насквозь; цек. Ø6,5</text>
 
 <!-- 7. Размеры сетки крепежных отверстий рельса справа от FrontView -->
 <!-- Отметка первого отверстия от ступеньки: 7,5 -->
-<line x1="95" y1="154.5" x2="120" y2="154.5" class="dim-ext" />
-<line x1="95" y1="147.0" x2="120" y2="147.0" class="dim-ext" />
-<line x1="118" y1="154.5" x2="118" y2="147.0" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="115.5" y="151.8" transform="rotate(-90 115.5 151.8)" class="dim-text">7,5</text>
+<line x1="95" y1="146.5" x2="120" y2="146.5" class="dim-ext" />
+<line x1="95" y1="139.0" x2="120" y2="139.0" class="dim-ext" />
+<line x1="118" y1="146.5" x2="118" y2="139.0" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="115.5" y="143.8" transform="rotate(-90 115.5 143.8)" class="dim-text">7,5</text>
 
 <!-- Суммарный шаг отверстий: 4 x 20 = 80 -->
-<line x1="95" y1="67.0" x2="128" y2="67.0" class="dim-ext" />
-<line x1="95" y1="147.0" x2="128" y2="147.0" class="dim-ext" />
-<line x1="126" y1="147.0" x2="126" y2="67.0" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="124" y="107.0" transform="rotate(-90 124 107.0)" class="dim-text">4×20=80</text>
+<line x1="95" y1="59.0" x2="128" y2="59.0" class="dim-ext" />
+<line x1="95" y1="139.0" x2="128" y2="139.0" class="dim-ext" />
+<line x1="126" y1="139.0" x2="126" y2="59.0" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="124" y="99.0" transform="rotate(-90 124 99.0)" class="dim-text">4×20=80</text>
 
 <!-- Выноска 5 отв. М3 глуб. 10 вверху -->
-<path d="M 95 67.0 L 115 56.0 L 155 56.0" class="leader" marker-start="url(#dot)" />
-<text x="135" y="54.5" class="dim-text">5 отв. M3 глуб. 10</text>
+<path d="M 95 59.0 L 115 48.0 L 155 48.0" class="leader" marker-start="url(#dot)" />
+<text x="135" y="46.5" class="dim-text">5 отв. M3 глуб. 10</text>
 
 
 <!-- ==================== РАЗРЕЗ А-А (SectionView) ==================== -->
@@ -343,19 +344,19 @@ def generate_stripper_guide_drawing(part_name="part_stripper_guide",
 {holes_sec_svg}
 
 <!-- Надпись обозначения разреза А-А -->
-<text x="210" y="38" font-family="osifont, Arial, sans-serif" font-size="4.5px" font-weight="bold" fill="#000" text-anchor="middle">А-А</text>
+<text x="210" y="30" font-family="osifont, Arial, sans-serif" font-size="4.5px" font-weight="bold" fill="#000" text-anchor="middle">А-А</text>
 
 <!-- 8. Глубина стойки 18 сверху -->
-<line x1="204" y1="54.5" x2="204" y2="44" class="dim-ext" />
-<line x1="222" y1="54.5" x2="222" y2="44" class="dim-ext" />
-<line x1="204" y1="46" x2="222" y2="46" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="213" y="44.5" class="dim-text">18</text>
+<line x1="204" y1="46.5" x2="204" y2="36" class="dim-ext" />
+<line x1="222" y1="46.5" x2="222" y2="36" class="dim-ext" />
+<line x1="204" y1="38" x2="222" y2="38" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="213" y="36.5" class="dim-text">18</text>
 
 <!-- 9. Глубина ступеньки 8 -->
-<line x1="196" y1="154.5" x2="196" y2="162" class="dim-ext" />
-<line x1="204" y1="154.5" x2="204" y2="162" class="dim-ext" />
-<line x1="196" y1="160" x2="204" y2="160" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="200" y="158.5" class="dim-text">8</text>
+<line x1="196" y1="146.5" x2="196" y2="136" class="dim-ext" />
+<line x1="204" y1="146.5" x2="204" y2="136" class="dim-ext" />
+<line x1="196" y1="138" x2="204" y2="138" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="200" y="136.5" class="dim-text">8</text>
 
 <!-- 10. Глубина фланца 28 снизу -->
 <line x1="196" y1="189.5" x2="196" y2="201" class="dim-ext" />
@@ -370,8 +371,8 @@ def generate_stripper_guide_drawing(part_name="part_stripper_guide",
 <text x="235" y="185.5" transform="rotate(-90 235 185.5)" class="dim-text">10</text>
 
 <!-- Выноска опорной ступеньки -->
-<path d="M 200 154.5 L 180 142 L 140 142" class="leader" marker-start="url(#dot)" />
-<text x="160" y="140.5" class="dim-text">Опора рельса MGN9</text>
+<path d="M 200 146.5 L 180 155 L 140 155" class="leader" marker-start="url(#dot)" />
+<text x="160" y="153.5" class="dim-text">Опора рельса MGN9</text>
 
 </svg>'''
 

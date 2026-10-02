@@ -116,25 +116,26 @@ def build_assembly(doc):
         return shank.fuse(head)
 
     stripper_guide = create_stripper_guide()
-    stripper_guide.Placement = FreeCAD.Placement(FreeCAD.Vector(guide_x, guide_y, 18.0), rot_guide)
+    stripper_guide.Placement = FreeCAD.Placement(FreeCAD.Vector(guide_x, guide_y, 10.0), rot_guide)
     
     # 8c. Berry Stripper (Поз. 15: Съемник ягод)
     stripper_body = create_stripper()
+    stripper_body.translate(FreeCAD.Vector(0, 0, 8.0))
     stripper_screws = []
     for x_sc in [-10.0, 10.0]:
         sc = make_screw_din912(3.0, 16.0, head_h=3.0, head_d=5.5)
         sc.rotate(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1, 0, 0), -90.0)
-        sc.translate(FreeCAD.Vector(x_sc, 3.0, 48.0))
+        sc.translate(FreeCAD.Vector(x_sc, 3.0, 56.0))
         stripper_screws.append(sc)
     stripper = Part.makeCompound([stripper_body] + stripper_screws)
     stripper.Placement = stripper_guide.Placement
     
     # 8a. Linear Guide Rail MGN9-100 (Поз. 14)
-    # Mounted on stripper_guide step (Z = 35.0, face Y = 0.0)
+    # Mounted on stripper_guide step (Z = 43.0, face Y = 0.0)
     mat_r2g = FreeCAD.Matrix(
         0, 1, 0, 0,
         0, 0, 1, 0,
-        1, 0, 0, 35.0,
+        1, 0, 0, 43.0,
         0, 0, 0, 1
     )
     pl_r2g = FreeCAD.Placement(mat_r2g)
@@ -143,10 +144,10 @@ def build_assembly(doc):
     mgn9_rail.Placement = pl_rail_glob
     
     # 8b. Linear Carriage MGN9H (Поз. 15)
-    # Slides on rail along guide Z-axis; at BDC position Z_c = 78.39 mm
-    z_c = 78.39
+    # Slides on rail along guide Z-axis; at BDC position Z_c = 86.39 mm
+    z_c = 86.39
     mgn9h_carriage = create_mgn9h_carriage()
-    mgn9h_carriage.translate(FreeCAD.Vector(z_c - 35.0, 0, 0))
+    mgn9h_carriage.translate(FreeCAD.Vector(z_c - 43.0, 0, 0))
     mgn9h_carriage.Placement = pl_rail_glob.multiply(mgn9h_carriage.Placement)
     
     # 7. Needle Slider Carriage (Поз. 7)
@@ -218,15 +219,15 @@ def build_assembly(doc):
     screw_m.rotate(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1, 0, 0), 90.0)
     screw_m.translate(FreeCAD.Vector(-44.0, -62.0, 70.0))
     
-    # Screws M3x8 fixing stand flanges to base frame (4 pcs)
+    # Screws M3x8 fixing stand flanges to base frame (4 pcs, counterbored flush)
     screws_base = []
     for x_off in [-6.0, 6.0]:
         sb_p = make_screw_din912(3.0, 8.0, head_h=3.0, head_d=5.5)
-        sb_p.translate(FreeCAD.Vector(-44.0 + x_off, 63.0, 15.0))
+        sb_p.translate(FreeCAD.Vector(-44.0 + x_off, 68.0, 12.0))
         screws_base.append(sb_p)
         
         sb_m = make_screw_din912(3.0, 8.0, head_h=3.0, head_d=5.5)
-        sb_m.translate(FreeCAD.Vector(-44.0 + x_off, -63.0, 15.0))
+        sb_m.translate(FreeCAD.Vector(-44.0 + x_off, -68.0, 12.0))
         screws_base.append(sb_m)
         
     hopper_stands = Part.makeCompound([stand_p, stand_m, screw_p, screw_m] + screws_base)
