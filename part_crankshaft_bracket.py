@@ -49,12 +49,12 @@ from freecad_utils import (
 # ГЕОМЕТРИЧЕСКИЕ ПАРАМЕТРЫ КРОНШТЕЙНА (в локальной системе координат)
 # ====================================================================
 # Базовая опорная плоскость: Z = 0 (устанавливается на станину Z_asm = 10.0 мм)
-# Горизонтальная ось кривошипа: X = 0.0, Z = 47.05 мм, направлена вдоль оси Y.
+# Горизонтальная ось кривошипа: X = 0.0, Z = 44.0 мм, направлена вдоль оси Y.
 # Плоскость Y = 0.0: соответствует заднему торцу колеса кривошипа (Z_crank = 0.0).
 # Направление -Y: в сторону шестерни и подшипника 608ZZ.
 # Направление +Y: назад (от шестерни, в сторону свободного пространства).
 
-H_AXIS = 47.05            # Высота оси вала от опорного фланца (57.05 - 10.0 мм)
+H_AXIS = 44.0             # Высота оси вала от опорного фланца (54.0 - 10.0 мм)
 
 # Опорный монтажный фланец
 FLANGE_W = 44.0           # Ширина фланца вдоль X (-22.0 .. +22.0 мм)
@@ -70,7 +70,7 @@ CB_DEPTH = 4.0            # Глубина цековки под головку 
 # Вертикальная монолитная стойка (пилон)
 COL_W = 16.0              # Ширина стойки вдоль X (-8.0 .. +8.0 мм, зазор 6.0 мм до оси M4)
 COL_D = 16.0              # Толщина стойки вдоль Y (+2.0 .. +18.0 мм)
-COL_H = 47.05             # Высота стойки до оси вала
+COL_H = 44.0              # Высота стойки до оси вала
 
 # Верхняя ступица (бобышка под ось M8)
 BOSS_R = 12.0             # Наружный радиус бобышки (Ø24.0 мм)
@@ -264,7 +264,7 @@ def generate_crankshaft_bracket_drawing(part_name="part_crankshaft_bracket",
         return (cs_x + (y - y_mid_top) * scale, cs_y - (z - z_mid) * scale)
 
     # Опорные точки:
-    f_axis = f_pt(0, 47.05)
+    f_axis = f_pt(0, H_AXIS)
     f_flange_l = f_pt(-22, 0)
     f_flange_r = f_pt(22, 0)
     f_flange_top = f_pt(0, 8)
@@ -274,9 +274,9 @@ def generate_crankshaft_bracket_drawing(part_name="part_crankshaft_bracket",
     t_h1 = t_pt(14, 10)
     t_h2 = t_pt(14, 32)
 
-    s_axis = s_pt(18, 47.05)
-    s_boss_front = s_pt(2, 47.05)
-    s_boss_back = s_pt(18, 47.05)
+    s_axis = s_pt(18, H_AXIS)
+    s_boss_front = s_pt(2, H_AXIS)
+    s_boss_back = s_pt(18, H_AXIS)
 
     svg_dim = f'''<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 420 297">
 <defs>
@@ -307,10 +307,10 @@ def generate_crankshaft_bracket_drawing(part_name="part_crankshaft_bracket",
          L {f_pt(22, 0)[0]} {f_pt(22, 0)[1]}
          L {f_pt(22, 8)[0]} {f_pt(22, 8)[1]}
          L {f_pt(8, 8)[0]} {f_pt(8, 8)[1]}
-         L {f_pt(8, 47.05)[0]} {f_pt(8, 47.05)[1]}
-         L {f_pt(12, 47.05)[0]} {f_pt(12, 47.05)[1]}
-         A 12 12 0 0 0 {f_pt(-12, 47.05)[0]} {f_pt(-12, 47.05)[1]}
-         L {f_pt(-8, 47.05)[0]} {f_pt(-8, 47.05)[1]}
+         L {f_pt(8, H_AXIS)[0]} {f_pt(8, H_AXIS)[1]}
+         L {f_pt(12, H_AXIS)[0]} {f_pt(12, H_AXIS)[1]}
+         A 12 12 0 0 0 {f_pt(-12, H_AXIS)[0]} {f_pt(-12, H_AXIS)[1]}
+         L {f_pt(-8, H_AXIS)[0]} {f_pt(-8, H_AXIS)[1]}
          L {f_pt(-8, 8)[0]} {f_pt(-8, 8)[1]}
          L {f_pt(-22, 8)[0]} {f_pt(-22, 8)[1]} Z" class="contour-line" />
 <line x1="{f_pt(-22, 8)[0]}" y1="{f_pt(-22, 8)[1]}" x2="{f_pt(-8, 8)[0]}" y2="{f_pt(-8, 8)[1]}" class="contour-line" />
@@ -337,16 +337,16 @@ def generate_crankshaft_bracket_drawing(part_name="part_crankshaft_bracket",
          L {s_pt(40, 8)[0]} {s_pt(40, 8)[1]}
          L {s_pt(38, 8)[0]} {s_pt(38, 8)[1]}
          L {s_pt(18, 28)[0]} {s_pt(18, 28)[1]}
-         L {s_pt(18, 59.05)[0]} {s_pt(18, 59.05)[1]}
-         L {s_pt(2, 59.05)[0]} {s_pt(2, 59.05)[1]}
+         L {s_pt(18, H_AXIS + BOSS_R)[0]} {s_pt(18, H_AXIS + BOSS_R)[1]}
+         L {s_pt(2, H_AXIS + BOSS_R)[0]} {s_pt(2, H_AXIS + BOSS_R)[1]}
          L {s_pt(2, 0)[0]} {s_pt(2, 0)[1]} Z" class="contour-line" />
 <line x1="{s_pt(2, 8)[0]}" y1="{s_pt(2, 8)[1]}" x2="{s_pt(40, 8)[0]}" y2="{s_pt(40, 8)[1]}" class="contour-line" />
 
 <!-- ==================== ОСЕВЫЕ ЛИНИИ ==================== -->
-<line x1="{cf_x}" y1="{f_pt(0, 63)[1]}" x2="{cf_x}" y2="{f_pt(0, -3)[1]}" class="center-line" />
-<line x1="{f_pt(-16, 47.05)[0]}" y1="{f_axis[1]}" x2="{f_pt(16, 47.05)[0]}" y2="{f_axis[1]}" class="center-line" />
+<line x1="{cf_x}" y1="{f_pt(0, H_AXIS + BOSS_R + 4)[1]}" x2="{cf_x}" y2="{f_pt(0, -3)[1]}" class="center-line" />
+<line x1="{f_pt(-16, H_AXIS)[0]}" y1="{f_axis[1]}" x2="{f_pt(16, H_AXIS)[0]}" y2="{f_axis[1]}" class="center-line" />
 <line x1="{cf_x}" y1="{t_pt(0, 44)[1]}" x2="{cf_x}" y2="{t_pt(0, -3)[1]}" class="center-line" />
-<line x1="{s_pt(-2, 47.05)[0]}" y1="{s_axis[1]}" x2="{s_pt(24, 47.05)[0]}" y2="{s_axis[1]}" class="center-line" />
+<line x1="{s_pt(-2, H_AXIS)[0]}" y1="{s_axis[1]}" x2="{s_pt(24, H_AXIS)[0]}" y2="{s_axis[1]}" class="center-line" />
 
 <!-- ==================== РАЗМЕРЫ ==================== -->
 <!-- FrontView размеры -->
@@ -368,27 +368,27 @@ def generate_crankshaft_bracket_drawing(part_name="part_crankshaft_bracket",
 <line x1="{f_flange_l[0] - 8}" y1="{f_flange_l[1]}" x2="{f_flange_l[0] - 8}" y2="{f_flange_top[1]}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
 <text x="{f_flange_l[0] - 10}" y="{(f_flange_l[1] + f_flange_top[1]) / 2}" transform="rotate(-90 {f_flange_l[0] - 10} {(f_flange_l[1] + f_flange_top[1]) / 2})" class="dim-text">8</text>
 
-<!-- Высота оси вала: 47,05* мм -->
+<!-- Высота оси вала: 44* мм -->
 <line x1="{f_flange_l[0] - 12}" y1="{f_flange_l[1]}" x2="{f_flange_l[0] - 24}" y2="{f_flange_l[1]}" class="dim-ext" />
-<line x1="{f_pt(-12, 47.05)[0]}" y1="{f_axis[1]}" x2="{f_flange_l[0] - 24}" y2="{f_axis[1]}" class="dim-ext" />
+<line x1="{f_pt(-12, H_AXIS)[0]}" y1="{f_axis[1]}" x2="{f_flange_l[0] - 24}" y2="{f_axis[1]}" class="dim-ext" />
 <line x1="{f_flange_l[0] - 20}" y1="{f_flange_l[1]}" x2="{f_flange_l[0] - 20}" y2="{f_axis[1]}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="{f_flange_l[0] - 22}" y="{(f_flange_l[1] + f_axis[1]) / 2}" transform="rotate(-90 {f_flange_l[0] - 22} {(f_flange_l[1] + f_axis[1]) / 2})" class="dim-text">47,05*</text>
+<text x="{f_flange_l[0] - 22}" y="{(f_flange_l[1] + f_axis[1]) / 2}" transform="rotate(-90 {f_flange_l[0] - 22} {(f_flange_l[1] + f_axis[1]) / 2})" class="dim-text">44*</text>
 
-<!-- Габаритная высота: 59* мм -->
+<!-- Габаритная высота: 56* мм -->
 <line x1="{f_flange_r[0]}" y1="{f_flange_r[1]}" x2="{f_flange_r[0] + 16}" y2="{f_flange_r[1]}" class="dim-ext" />
-<line x1="{f_pt(12, 59.05)[0]}" y1="{f_pt(0, 59.05)[1]}" x2="{f_flange_r[0] + 16}" y2="{f_pt(0, 59.05)[1]}" class="dim-ext" />
-<line x1="{f_flange_r[0] + 12}" y1="{f_flange_r[1]}" x2="{f_flange_r[0] + 12}" y2="{f_pt(0, 59.05)[1]}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="{f_flange_r[0] + 14}" y="{(f_flange_r[1] + f_pt(0, 59.05)[1]) / 2}" transform="rotate(-90 {f_flange_r[0] + 14} {(f_flange_r[1] + f_pt(0, 59.05)[1]) / 2})" class="dim-text">59*</text>
+<line x1="{f_pt(12, H_AXIS + BOSS_R)[0]}" y1="{f_pt(0, H_AXIS + BOSS_R)[1]}" x2="{f_flange_r[0] + 16}" y2="{f_pt(0, H_AXIS + BOSS_R)[1]}" class="dim-ext" />
+<line x1="{f_flange_r[0] + 12}" y1="{f_flange_r[1]}" x2="{f_flange_r[0] + 12}" y2="{f_pt(0, H_AXIS + BOSS_R)[1]}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="{f_flange_r[0] + 14}" y="{(f_flange_r[1] + f_pt(0, H_AXIS + BOSS_R)[1]) / 2}" transform="rotate(-90 {f_flange_r[0] + 14} {(f_flange_r[1] + f_pt(0, H_AXIS + BOSS_R)[1]) / 2})" class="dim-text">56*</text>
 
 <!-- Выноска диаметра отверстия оси: Ø8,4 -->
 <path d="M {cf_x + 2} {f_axis[1] - 2} L {cf_x + 22} {f_axis[1] - 16} L {cf_x + 42} {f_axis[1] - 16}" class="leader" marker-start="url(#dot)" />
 <text x="{cf_x + 24}" y="{f_axis[1] - 17.5}" class="dim-text-left">Ø8,4</text>
 
 <!-- Наружный диаметр бобышки: Ø24 -->
-<line x1="{f_pt(-12, 47.05)[0]}" y1="{f_pt(0, 59.05)[1]}" x2="{f_pt(-12, 47.05)[0]}" y2="{f_pt(0, 59.05)[1] - 10}" class="dim-ext" />
-<line x1="{f_pt(12, 47.05)[0]}" y1="{f_pt(0, 59.05)[1]}" x2="{f_pt(12, 47.05)[0]}" y2="{f_pt(0, 59.05)[1] - 10}" class="dim-ext" />
-<line x1="{f_pt(-12, 47.05)[0]}" y1="{f_pt(0, 59.05)[1] - 7}" x2="{f_pt(12, 47.05)[0]}" y2="{f_pt(0, 59.05)[1] - 7}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="{cf_x}" y="{f_pt(0, 59.05)[1] - 8.5}" class="dim-text">Ø24</text>
+<line x1="{f_pt(-12, H_AXIS)[0]}" y1="{f_pt(0, H_AXIS + BOSS_R)[1]}" x2="{f_pt(-12, H_AXIS)[0]}" y2="{f_pt(0, H_AXIS + BOSS_R)[1] - 10}" class="dim-ext" />
+<line x1="{f_pt(12, H_AXIS)[0]}" y1="{f_pt(0, H_AXIS + BOSS_R)[1]}" x2="{f_pt(12, H_AXIS)[0]}" y2="{f_pt(0, H_AXIS + BOSS_R)[1] - 10}" class="dim-ext" />
+<line x1="{f_pt(-12, H_AXIS)[0]}" y1="{f_pt(0, H_AXIS + BOSS_R)[1] - 7}" x2="{f_pt(12, H_AXIS)[0]}" y2="{f_pt(0, H_AXIS + BOSS_R)[1] - 7}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="{cf_x}" y="{f_pt(0, H_AXIS + BOSS_R)[1] - 8.5}" class="dim-text">Ø24</text>
 
 <!-- TopView размеры -->
 <!-- Межосевое расстояние отверстий по Y: 22 мм -->
@@ -410,22 +410,22 @@ def generate_crankshaft_bracket_drawing(part_name="part_crankshaft_bracket",
 
 <!-- LeftView размеры и скрытые линии -->
 <!-- Скрытые линии отверстия оси и цековки на виде слева -->
-<line x1="{s_pt(2, 47.05 - 4.2)[0]}" y1="{s_pt(2, 47.05 - 4.2)[1]}" x2="{s_pt(12, 47.05 - 4.2)[0]}" y2="{s_pt(12, 47.05 - 4.2)[1]}" class="hidden-line" />
-<line x1="{s_pt(2, 47.05 + 4.2)[0]}" y1="{s_pt(2, 47.05 + 4.2)[1]}" x2="{s_pt(12, 47.05 + 4.2)[0]}" y2="{s_pt(12, 47.05 + 4.2)[1]}" class="hidden-line" />
-<line x1="{s_pt(12, 47.05 - 7.25)[0]}" y1="{s_pt(12, 47.05 - 7.25)[1]}" x2="{s_pt(18, 47.05 - 7.25)[0]}" y2="{s_pt(18, 47.05 - 7.25)[1]}" class="hidden-line" />
-<line x1="{s_pt(12, 47.05 + 7.25)[0]}" y1="{s_pt(12, 47.05 + 7.25)[1]}" x2="{s_pt(18, 47.05 + 7.25)[0]}" y2="{s_pt(18, 47.05 + 7.25)[1]}" class="hidden-line" />
-<line x1="{s_pt(12, 47.05 - 7.25)[0]}" y1="{s_pt(12, 47.05 - 7.25)[1]}" x2="{s_pt(12, 47.05 - 4.2)[0]}" y2="{s_pt(12, 47.05 - 4.2)[1]}" class="hidden-line" />
-<line x1="{s_pt(12, 47.05 + 4.2)[0]}" y1="{s_pt(12, 47.05 + 4.2)[1]}" x2="{s_pt(12, 47.05 + 7.25)[0]}" y2="{s_pt(12, 47.05 + 7.25)[1]}" class="hidden-line" />
+<line x1="{s_pt(2, H_AXIS - 4.2)[0]}" y1="{s_pt(2, H_AXIS - 4.2)[1]}" x2="{s_pt(12, H_AXIS - 4.2)[0]}" y2="{s_pt(12, H_AXIS - 4.2)[1]}" class="hidden-line" />
+<line x1="{s_pt(2, H_AXIS + 4.2)[0]}" y1="{s_pt(2, H_AXIS + 4.2)[1]}" x2="{s_pt(12, H_AXIS + 4.2)[0]}" y2="{s_pt(12, H_AXIS + 4.2)[1]}" class="hidden-line" />
+<line x1="{s_pt(12, H_AXIS - 7.25)[0]}" y1="{s_pt(12, H_AXIS - 7.25)[1]}" x2="{s_pt(18, H_AXIS - 7.25)[0]}" y2="{s_pt(18, H_AXIS - 7.25)[1]}" class="hidden-line" />
+<line x1="{s_pt(12, H_AXIS + 7.25)[0]}" y1="{s_pt(12, H_AXIS + 7.25)[1]}" x2="{s_pt(18, H_AXIS + 7.25)[0]}" y2="{s_pt(18, H_AXIS + 7.25)[1]}" class="hidden-line" />
+<line x1="{s_pt(12, H_AXIS - 7.25)[0]}" y1="{s_pt(12, H_AXIS - 7.25)[1]}" x2="{s_pt(12, H_AXIS - 4.2)[0]}" y2="{s_pt(12, H_AXIS - 4.2)[1]}" class="hidden-line" />
+<line x1="{s_pt(12, H_AXIS + 4.2)[0]}" y1="{s_pt(12, H_AXIS + 4.2)[1]}" x2="{s_pt(12, H_AXIS + 7.25)[0]}" y2="{s_pt(12, H_AXIS + 7.25)[1]}" class="hidden-line" />
 
 <!-- Длина бобышки: 16 мм -->
-<line x1="{s_boss_front[0]}" y1="{s_pt(2, 59.05)[1]}" x2="{s_boss_front[0]}" y2="{s_pt(2, 59.05)[1] - 8}" class="dim-ext" />
-<line x1="{s_boss_back[0]}" y1="{s_pt(18, 59.05)[1]}" x2="{s_boss_back[0]}" y2="{s_pt(18, 59.05)[1] - 8}" class="dim-ext" />
-<line x1="{s_boss_front[0]}" y1="{s_pt(2, 59.05)[1] - 5}" x2="{s_boss_back[0]}" y2="{s_pt(18, 59.05)[1] - 5}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="{(s_boss_front[0] + s_boss_back[0]) / 2}" y="{s_pt(2, 59.05)[1] - 6.5}" class="dim-text">16</text>
+<line x1="{s_boss_front[0]}" y1="{s_pt(2, H_AXIS + BOSS_R)[1]}" x2="{s_boss_front[0]}" y2="{s_pt(2, H_AXIS + BOSS_R)[1] - 8}" class="dim-ext" />
+<line x1="{s_boss_back[0]}" y1="{s_pt(18, H_AXIS + BOSS_R)[1]}" x2="{s_boss_back[0]}" y2="{s_pt(18, H_AXIS + BOSS_R)[1] - 8}" class="dim-ext" />
+<line x1="{s_boss_front[0]}" y1="{s_pt(2, H_AXIS + BOSS_R)[1] - 5}" x2="{s_boss_back[0]}" y2="{s_pt(18, H_AXIS + BOSS_R)[1] - 5}" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
+<text x="{(s_boss_front[0] + s_boss_back[0]) / 2}" y="{s_pt(2, H_AXIS + BOSS_R)[1] - 6.5}" class="dim-text">16</text>
 
 <!-- Задняя цековка под болт M8: цек. Ø14,5 глуб. 6 -->
-<path d="M {s_pt(15, 47.05 - 7.25)[0]} {s_pt(15, 47.05 - 7.25)[1]} L {s_pt(15, 47.05 - 7.25)[0] + 16} {s_pt(15, 47.05 - 7.25)[1] + 14} L {s_pt(15, 47.05 - 7.25)[0] + 45} {s_pt(15, 47.05 - 7.25)[1] + 14}" class="leader" marker-start="url(#dot)" />
-<text x="{s_pt(15, 47.05 - 7.25)[0] + 18}" y="{s_pt(15, 47.05 - 7.25)[1] + 12.5}" class="dim-text-left">цек. Ø14,5 глуб. 6</text>
+<path d="M {s_pt(15, H_AXIS - 7.25)[0]} {s_pt(15, H_AXIS - 7.25)[1]} L {s_pt(15, H_AXIS - 7.25)[0] + 16} {s_pt(15, H_AXIS - 7.25)[1] + 14} L {s_pt(15, H_AXIS - 7.25)[0] + 45} {s_pt(15, H_AXIS - 7.25)[1] + 14}" class="leader" marker-start="url(#dot)" />
+<text x="{s_pt(15, H_AXIS - 7.25)[0] + 18}" y="{s_pt(15, H_AXIS - 7.25)[1] + 12.5}" class="dim-text-left">цек. Ø14,5 глуб. 6</text>
 
 <!-- Угол наклонного ребра жесткости: 45° -->
 <text x="{s_pt(26, 20)[0]}" y="{s_pt(26, 20)[1]}" class="dim-text">45°</text>

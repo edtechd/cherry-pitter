@@ -70,12 +70,12 @@ def build_assembly(doc):
     flange_coupling.Placement = FreeCAD.Placement(FreeCAD.Vector(60.0, 0, 14.0), rot_coupling)
     
     # 5. Horizontal Crankshaft
-    # Bevel gear meshing with Geneva driver at apex [60.0, 0.0, 57.05]
+    # Involute bevel gear meshing with Geneva driver at apex [60.0, 0.0, 54.0]
     # Positioned at angle alpha = -60 deg around Geneva driver vertical axis
     # Disc line is oriented at 30 deg, strictly parallel to stripper guide base
     alpha_deg = -60.0
     alpha = math.radians(alpha_deg)
-    p_apex = FreeCAD.Vector(60.0, 0.0, 57.05)
+    p_apex = FreeCAD.Vector(60.0, 0.0, 54.0)
     mat_crank = FreeCAD.Matrix(
         0, -math.sin(alpha), -math.cos(alpha), 0,
         0,  math.cos(alpha), -math.sin(alpha), 0,
@@ -83,7 +83,9 @@ def build_assembly(doc):
         0,  0,                0,               1
     )
     rot_crank = FreeCAD.Rotation(mat_crank)
-    pos_crank = p_apex - rot_crank.multVec(FreeCAD.Vector(0, 0, 43.05))
+    # Apply tooth meshing phase offset of 1.5 deg for tooth-in-space engagement
+    rot_crank = rot_crank.multiply(FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 1.5))
+    pos_crank = p_apex - rot_crank.multVec(FreeCAD.Vector(0, 0, 40.0))
     
     crankshaft = create_horizontal_crankshaft()
     crankshaft.Placement = FreeCAD.Placement(pos_crank, rot_crank)
@@ -93,7 +95,7 @@ def build_assembly(doc):
     # Mounted on base_frame top surface (Z = 10.0), located behind the gear to prevent clash
     rot_bracket = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 210.0)
     crank_bracket = create_crankshaft_bracket()
-    crank_bracket.Placement = FreeCAD.Placement(FreeCAD.Vector(81.525, -37.282, 10.0), rot_bracket)
+    crank_bracket.Placement = FreeCAD.Placement(FreeCAD.Vector(pos_crank.x, pos_crank.y, 10.0), rot_bracket)
     
     # 8. Stripper Guide Tower
     # Positioned close to 120-degree cell (22.0, -38.1), rotated 30 deg around Z
@@ -406,7 +408,7 @@ def main():
 <text x="10" y="25" font-family="osifont, Arial" font-size="3.2" fill="black">1. * Размеры для справок.</text>
 <text x="10" y="34" font-family="osifont, Arial" font-size="3.2" fill="black">2. Габаритные размеры изделия: 220 х 145 х 178* мм.</text>
 <text x="10" y="43" font-family="osifont, Arial" font-size="3.2" fill="black">3. Межосевое расстояние мальтийского привода: 60* мм.</text>
-<text x="10" y="52" font-family="osifont, Arial" font-size="3.2" fill="black">4. Передача коническая 1:1, z=40, m=2.0 мм, фланец поз. 22.</text>
+<text x="10" y="52" font-family="osifont, Arial" font-size="3.2" fill="black">4. Передача коническая эвольвентная 1:1, z=40, m=2.0 мм (freecad.gears).</text>
 <text x="10" y="61" font-family="osifont, Arial" font-size="3.2" fill="black">5. Величина рабочего хода штока пробивки: 36.0* мм.</text>
 <text x="10" y="70" font-family="osifont, Arial" font-size="3.2" fill="black">6. Привод штока — шатун L=85 мм с шарнирами SI3T/K,</text>
 <text x="14" y="77" font-family="osifont, Arial" font-size="3.2" fill="black">самоустанавливающийся без перекосов и заклиниваний.</text>

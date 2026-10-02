@@ -14,6 +14,11 @@ import math
 sys.path.append('/usr/lib/freecad/lib')
 sys.path.append('/usr/share/freecad/Mod/TechDraw')
 
+# Add freecad.gears addon path
+gears_path = os.path.expanduser('~/.FreeCAD/Mod/freecad.gears')
+if os.path.isdir(gears_path) and gears_path not in sys.path:
+    sys.path.append(gears_path)
+
 from PySide2 import QtWidgets, QtGui, QtSvg, QtCore
 
 def init_freecad():
@@ -26,6 +31,13 @@ def init_freecad():
     import FreeCADGui
     if hasattr(FreeCADGui, "showMainWindow"):
         FreeCADGui.showMainWindow()
+    
+    # Setup freecad namespace aliases for addons like freecad.gears
+    import freecad
+    freecad.app = FreeCAD
+    freecad.gui = FreeCADGui
+    sys.modules['freecad.app'] = FreeCAD
+    sys.modules['freecad.gui'] = FreeCADGui
     
     import Part
     import TechDraw
@@ -65,6 +77,41 @@ def trans(shape, dx, dy, dz):
     sh = shape.copy()
     sh.translate(FreeCAD.Vector(dx, dy, dz))
     return sh
+
+def make_involute_bevel_gear(module=2.0, num_teeth=40, height=8.0, pitch_angle=45.0,
+                             pressure_angle=20.0, clearance=0.1, backlash=0.05,
+                             beta=0.0, reset_origin=True):
+    """
+    Creates an analytical B-Rep solid of an involute bevel gear using the freecad.gears addon.
+    Parameters:
+    - module: Gear module m (mm)
+    - num_teeth: Number of teeth z
+    - height: Axial face height of the gear rim (mm)
+    - pitch_angle: Pitch cone semi-angle delta (deg), 45.0 for 1:1 90 deg bevel gear
+    - pressure_angle: Normal pressure angle alpha (deg), standard 20.0
+    - clearance: Bottom clearance coefficient c*
+    - backlash: Circumferential backlash (mm)
+    - beta: Spiral bevel angle (0.0 for straight bevel gear)
+    - reset_origin: When True, back face is at Z = 0 and apex is at Z = (module*num_teeth)/(2*tan(pitch_angle))
+    """
+    import freecad.gears.commands as cmd
+    temp_doc = FreeCAD.newDocument("_temp_gear_gen")
+    try:
+        g = cmd.CreateBevelGear.create()
+        g.module = module
+        g.num_teeth = num_teeth
+        g.height = height
+        g.pitch_angle = pitch_angle
+        g.pressure_angle = pressure_angle
+        g.clearance = clearance
+        g.backlash = backlash
+        g.beta = beta
+        g.reset_origin = reset_origin
+        g.recompute()
+        shape = g.Shape.copy()
+    finally:
+        FreeCAD.closeDocument("_temp_gear_gen")
+    return shape
 
 # ====================================================================
 # TECHDRAW DRAWING PAGE & EXPORT HELPERS

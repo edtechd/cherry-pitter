@@ -14,58 +14,42 @@ import math
 from freecad_utils import (
     FreeCAD, Part, TechDraw, TechDrawGui,
     make_box, make_cylinder, rot_z,
+    make_involute_bevel_gear,
     create_drawing_page, add_part_view,
     fill_gost_title_block, export_drawing
 )
 
 def create_horizontal_crankshaft():
     """
-    Constructs the Horizontal Crankshaft Bevel Gear B-Rep solid along local Z-axis.
-    - Bevel gear rim: z = 40, m = 2.0 mm, pitch diameter d = 80.0 mm, delta = 45 deg,
-      face width b = 7.0 mm, outer diameter da = 82.83 mm (Ra = 41.414 mm),
-      inner diameter d_inner = 70.10 mm (R_inner = 35.050 mm).
+    Constructs the Horizontal Crankshaft Involute Bevel Gear B-Rep solid along local Z-axis.
+    Generated via freecad.gears addon:
+    - Involute bevel gear rim: z = 40, m = 2.0 mm, pitch diameter d = 80.0 mm, delta = 45 deg,
+      height = 8.0 mm (Z in [0, 8.0]), pressure angle = 20 deg, clearance = 0.1, backlash = 0.05 mm.
     - Disc body: thickness 8.0 mm (Z in [0, 8.0]).
     - Central hole: Ø22.1 mm (+0.1 mm tolerance) through for 608ZZ bearing (8x22x7 mm).
-    - No protruding hub (monolithic gear disc).
+    - Monolithic gear disc without protruding hub.
     - Crank pin: on front face (Z in [8.0, 16.0]), at R = 18.0 mm (X = -18.0, Y = 0.0),
       Ø3.0 mm, height 8.0 mm, for SI3T/K rod end bearing connection. Provides stroke = 36.0 mm.
+    - Apex of pitch cone: Z_apex = 40.0 mm along rotation axis.
     """
-    m = 2.0
-    z = 40
-    r_pitch = (m * z) / 2.0  # 40.0 mm
-    delta = math.radians(45.0)
-    face_width = 7.0
-    r_outer = r_pitch + m * math.cos(delta)  # 41.414 mm
-    r_inner = r_pitch - face_width * math.sin(delta)  # 35.050 mm
-    z_apex = 8.0 + r_inner  # 43.05 mm
-
-    # 1. Base disc blank (Z in [0, 8.0]) with conical bevel on outer rim
-    disc_center = make_cylinder(r_inner, 8.0, (0, 0, 0))
-    cone_outer = Part.makeCone(
-        r_outer + 2.0, 0.0, r_outer + 2.0,
-        FreeCAD.Vector(0, 0, z_apex - (r_outer + 2.0)),
-        FreeCAD.Vector(0, 0, 1)
+    # 1. Involute bevel gear solid using freecad.gears addon
+    gear = make_involute_bevel_gear(
+        module=2.0,
+        num_teeth=40,
+        height=8.0,
+        pitch_angle=45.0,
+        pressure_angle=20.0,
+        clearance=0.1,
+        backlash=0.05,
+        beta=0.0,
+        reset_origin=True
     )
-    disc_blank = make_cylinder(r_outer, 8.0, (0, 0, 0)).common(cone_outer)
-    gear_body = disc_center.fuse(disc_blank)
 
-    # 2. 40 straight bevel tooth space cutters
-    cutters = []
-    for i in range(z):
-        ang = i * (360.0 / z)
-        c_box = make_box(12.0, 2.5, 6.0, (33.0, -1.25, 0.0))
-        c_box = c_box.rotate(FreeCAD.Vector(38.0, 0, 5.0), FreeCAD.Vector(0, 1, 0), -45.0)
-        c_box = rot_z(c_box, ang, (0, 0, 0))
-        cutters.append(c_box)
-
-    all_cutters = Part.makeCompound(cutters)
-    gear = gear_body.cut(all_cutters)
-
-    # 3. Crank pin on front face at R = 18.0 mm (X = -18.0, Y = 0.0, Z in [8.0, 16.0]), Ø3.0 mm, height 8.0 mm
+    # 2. Crank pin on front face at R = 18.0 mm (X = -18.0, Y = 0.0, Z in [8.0, 16.0]), Ø3.0 mm, height 8.0 mm
     pin = make_cylinder(1.5, 8.0, (-18.0, 0, 8.0))
     gear = gear.fuse(pin)
 
-    # 4. Central hole for 608ZZ bearing (Ø22.1 mm through, Z in [-2.0, 10.0])
+    # 3. Central hole for 608ZZ bearing (Ø22.1 mm through, Z in [-2.0, 10.0])
     bearing_seat_r = (22.0 + 0.1) / 2.0  # 11.05 mm
     bore = make_cylinder(bearing_seat_r, 12.0, (0, 0, -2.0))
     gear = gear.cut(bore)
@@ -282,7 +266,8 @@ def generate_horizontal_crankshaft_drawing(part_name="part_horizontal_crankshaft
 if __name__ == "__main__":
     notes = [
         "1. * Размеры для справок.",
-        "2. Параметры зубчатого венца: z = 40, m = 2,0 мм, δ = 45°, d = 80,0* мм.",
+        "2. Зубчатый венец: конический эвольвентный (freecad.gears, ГОСТ 12289).",
+        "   Параметры: z = 40, m = 2,0 мм, δ = 45°, d = 80,0* мм, h = 8,0 мм.",
         "3. Передаточное отношение конической передачи u = 1:1, угол осей Σ = 90°.",
         "4. Радиус кривошипа R = 18,0* мм (обеспечивает ход штока 36,0* мм).",
         "5. Палец кривошипа Ø3 мм — под сферический шарнир SI3T/K (ГОСТ ISO 12240-4).",

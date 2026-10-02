@@ -18,50 +18,35 @@ import math
 from freecad_utils import (
     FreeCAD, Part, TechDraw, TechDrawGui,
     make_box, make_cylinder, make_cone, trans, rot_z,
+    make_involute_bevel_gear,
     create_drawing_page, add_part_view,
     fill_gost_title_block, export_drawing
 )
 
 def create_geneva_driver():
     """
-    Constructs the Geneva Driver with integrated Bevel Gear at local origin (0,0,0).
-    - Base disc: Z in [0, 8.0], outer diameter da = 82.83 mm (Ra = 41.41 mm).
-    - Straight bevel gear teeth: m = 2.0, z = 40, pitch diameter d = 80.0 mm,
-      pitch cone angle delta = 45 deg, face width b = 7.0 mm (R_inner = 35.05 mm).
+    Constructs the Geneva Driver with integrated Involute Bevel Gear at local origin (0,0,0).
+    Generated via freecad.gears addon:
+    - Base disc / Involute bevel gear rim: m = 2.0, z = 40, pitch diameter d = 80.0 mm,
+      pitch cone angle delta = 45 deg, face height = 8.0 mm (Z in [0, 8.0]),
+      backlash = 0.05 mm, clearance = 0.1, pressure angle = 20 deg.
     - 4 Blind M4 mounting holes at R = 12.0 mm (PCD 24 mm), depth 5.0 mm from Z = 0.
     - Locking cam: Z in [8.0, 14.0], R = 22.0 mm, height 6.0 mm, 240 deg dwell arc.
     - Driver pin: at R = 30.0 mm (X = -30.0, Y = 0), Ø5.0 mm, total height 16.0 mm (Z in [0, 16.0]).
+    - Apex of pitch cone: Z_apex = 40.0 mm along rotation axis.
     """
-    m = 2.0
-    z = 40
-    r_pitch = (m * z) / 2.0  # 40.0 mm
-    delta = math.radians(45.0)
-    face_width = 7.0
-    r_outer = r_pitch + m * math.cos(delta)  # 41.414 mm
-    r_inner = r_pitch - face_width * math.sin(delta)  # 35.050 mm
-    z_apex = 8.0 + r_inner  # 43.05 mm
-
-    # 1. Base disc blank with conical bevel on outer rim
-    disc_center = make_cylinder(r_inner, 8.0, (0, 0, 0))
-    cone_outer = Part.makeCone(
-        r_outer + 2.0, 0.0, r_outer + 2.0,
-        FreeCAD.Vector(0, 0, z_apex - (r_outer + 2.0)),
-        FreeCAD.Vector(0, 0, 1)
+    # 1. Involute bevel gear solid using freecad.gears addon
+    gear = make_involute_bevel_gear(
+        module=2.0,
+        num_teeth=40,
+        height=8.0,
+        pitch_angle=45.0,
+        pressure_angle=20.0,
+        clearance=0.1,
+        backlash=0.05,
+        beta=0.0,
+        reset_origin=True
     )
-    disc_blank = make_cylinder(r_outer, 8.0, (0, 0, 0)).common(cone_outer)
-    gear_body = disc_center.fuse(disc_blank)
-
-    # 40 straight bevel tooth space cutters
-    cutters = []
-    for i in range(z):
-        ang = i * (360.0 / z)
-        c_box = make_box(12.0, 2.5, 6.0, (33.0, -1.25, 0.0))
-        c_box = c_box.rotate(FreeCAD.Vector(38.0, 0, 5.0), FreeCAD.Vector(0, 1, 0), -45.0)
-        c_box = rot_z(c_box, ang, (0, 0, 0))
-        cutters.append(c_box)
-
-    all_cutters = Part.makeCompound(cutters)
-    gear = gear_body.cut(all_cutters)
 
     # 2. Locking cam (Z in [8.0, 14.0], R = 22.0 mm, height 6.0 mm above disc)
     cam = make_cylinder(22.0, 6.0, (0, 0, 8.0))
@@ -76,7 +61,7 @@ def create_geneva_driver():
     # 4. 4 Blind M4 mounting holes from bottom face (Z in [0, 5.0], radius 1.7 mm)
     for ang in [0, 90, 180, 270]:
         rad = math.radians(ang)
-        hole = make_cylinder(1.7, 5.0, (12.0 * math.cos(rad), 12.0 * math.sin(rad), 0.0))
+        hole = make_cylinder(1.7, 5.5, (12.0 * math.cos(rad), 12.0 * math.sin(rad), -0.5))
         gear = gear.cut(hole)
 
     if not gear.isValid():
@@ -296,7 +281,8 @@ def generate_geneva_driver_drawing(part_name="part_geneva_driver",
 if __name__ == "__main__":
     notes = [
         "1. * Размеры для справок.",
-        "2. Параметры зубчатого венца: z = 40, m = 2,0 мм, δ = 45°, d = 80,0* мм.",
+        "2. Зубчатый венец: конический эвольвентный (freecad.gears, ГОСТ 12289).",
+        "   Параметры: z = 40, m = 2,0 мм, δ = 45°, d = 80,0* мм, h = 8,0 мм.",
         "3. Передаточное отношение конической передачи u = 1:1, угол осей Σ = 90°.",
         "4. Радиус расположения цевки: R = 30,0* мм.",
         "5. Диаметр кулачка выстоя: Ø44,0* мм (дуга выстоя 240°).",
