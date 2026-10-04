@@ -10,7 +10,7 @@ A complete, production-ready, open-source automated desktop cherry and sour cher
 
 The entire mechanical assembly was synthesized and verified programmatically via **pure Python scripts calling FreeCAD B-Rep geometry and TechDraw drafting engines in headless Linux mode**, paired with automated **Gmsh + CalculiX finite element analysis (FEA)** and kinematic collision verification.
 
-![Full Machine Kinematic Simulation](./berry_process_kinematics.gif)
+![Full Machine Kinematic Simulation](./assembly_kinematics.gif)
 
 ---
 
@@ -118,12 +118,12 @@ The carousel rotates counter-clockwise through six active stations spaced at $60
 stateDiagram-v2
     direction LR
     Station1: St. 1 (180°) - Gravity Hopper Loading
-    Station2: St. 2 (240°) - Transit & Berry Centering
+    Station2: St. 2 (240°) - Transit & Centering
     Station3: St. 3 (300°) - Pitting & Pit Extraction (Ø9.5 mm)
-    Station4: St. 4 (000°) - Ramp Elevation & Chute Ejection
-    Station5: St. 5 (060°) - Return Travel (Empty)
-    Station6: St. 6 (120°) - Return Travel (Ready for Feed)
-
+    Station4: St. 4 (000°) - Transit of Pitted Berry
+    Station5: St. 5 (060°) - Ramp Elevation & Chute Ejection
+    Station6: St. 6 (120°) - Empty Cup Return
+    
     Station1 --> Station2
     Station2 --> Station3
     Station3 --> Station4
@@ -131,6 +131,21 @@ stateDiagram-v2
     Station5 --> Station6
     Station6 --> Station1
 ```
+
+### 2.1. End-to-End Berry Lifecycle Simulation
+
+* **Stage 1 (Hopper Loading — $180^\circ$):** The cherry drops by gravity from the infeed hopper into an empty spherical pocket while the carousel dwells.
+* **Stage 2 (Advance to Punch Station):** The Geneva driver indexes the carousel counter-clockwise by two consecutive $60^\circ$ steps ($180^\circ \to 240^\circ \to 300^\circ$).
+* **Stage 3 (Punching & Pit Expulsion — $300^\circ$):** While the carousel dwells firmly locked by the Geneva cam:
+  * The punch slider (`NeedleSlider`) descends along the precision MGN9 linear rail.
+  * The cross-serrated stainless punch needle enters through the translucent stripper guide and pierces the berry.
+  * The cherry pit is forced through the bottom discharge aperture ($\varnothing 9.5\text{ mm}$) and falls into the lower pit chute (`PitChute`).
+  * The stripper plate retains the berry as the needle retracts back to Top Dead Center.
+* **Stage 4 (Advance to Ejection Station):** The pitted berry advances via Station 4 ($0^\circ$) to Station 5 ($60^\circ$).
+* **Stage 5 (Ramp Climbing & Chute Slide — $60^\circ$):**
+  * The berry meets the continuous stationary ejector knife riding inside the annular groove.
+  * It climbs the smooth inclined ramp ($Z: 53.0 \to 66.5\text{ mm}$).
+  * The overhead deflector canopy directs the berry radially outward onto the integrated collection chute (`MonolithicChute`), where it rolls down safely into the receiving tray.
 
 ![Berry Ejection Kinematics Storyboard](./ejector_kinematics_storyboard.png)
 
