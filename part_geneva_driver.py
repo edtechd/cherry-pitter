@@ -6,7 +6,7 @@ part_geneva_driver.py
 Доработано:
 - Толщина нижнего диска увеличена с 4 мм до 8 мм;
 - Сквозное отверстие под вал удалено (монолитная ступица);
-- Добавлено 4 глухих отверстия М4 глубиной 5 мм с нижней плоскости под крепление коннектора;
+- Добавлено 4 глухих отверстия М3 глубиной 5 мм с нижней плоскости под крепление коннектора ф6 (PCD 16 мм);
 - Диаметр диска увеличен до d_a = 82.8 мм под нарезку конического зубчатого венца;
 - Рассчитан и нарезан конический зубчатый венец (z = 40, m = 2.0 мм, δ = 45°, передача 1:1, Σ = 90°);
 - Разрез А-А, размеры и оформление по ГОСТ (ЕСКД).
@@ -30,7 +30,7 @@ def create_geneva_driver():
     - Base disc / Involute bevel gear rim: m = 2.0, z = 40, pitch diameter d = 80.0 mm,
       pitch cone angle delta = 45 deg, face height = 8.0 mm (Z in [0, 8.0]),
       backlash = 0.05 mm, clearance = 0.1, pressure angle = 20 deg.
-    - 4 Blind M4 mounting holes at R = 12.0 mm (PCD 24 mm), depth 5.0 mm from Z = 0.
+    - 4 Blind M3 mounting holes at R = 8.0 mm (PCD 16 mm), depth 5.0 mm from Z = 0.
     - Locking cam: Z in [8.0, 14.0], R = 22.0 mm, height 6.0 mm, 240 deg dwell arc.
     - Driver pin: at R = 30.0 mm (X = -30.0, Y = 0), Ø5.0 mm, total height 16.0 mm (Z in [0, 16.0]).
     - Apex of pitch cone: Z_apex = 40.0 mm along rotation axis.
@@ -58,10 +58,10 @@ def create_geneva_driver():
     pin = make_cylinder(2.5, 16.0, (-30.0, 0, 0))
     gear = gear.fuse(pin)
 
-    # 4. 4 Blind M4 mounting holes from bottom face (Z in [0, 5.0], radius 1.7 mm)
+    # 4. 4 Blind M3 mounting holes from bottom face (Z in [0, 5.0], radius 1.3 mm, PCD 16 mm)
     for ang in [0, 90, 180, 270]:
         rad = math.radians(ang)
-        hole = make_cylinder(1.7, 5.5, (12.0 * math.cos(rad), 12.0 * math.sin(rad), -0.5))
+        hole = make_cylinder(1.3, 5.5, (8.0 * math.cos(rad), 8.0 * math.sin(rad), -0.5))
         gear = gear.cut(hole)
 
     if not gear.isValid():
@@ -223,10 +223,10 @@ def generate_geneva_driver_drawing(part_name="part_geneva_driver",
 <line x1="193" y1="201" x2="193" y2="215" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
 <text x="191" y="209" transform="rotate(-90 191 209)" class="dim-text">14</text>
 
-<!-- 7. Выноска глухих отверстий М4 (снизу справа) -->
-<path d="M 147 212.5 L 165 224 L 210 224" class="leader" marker-start="url(#dot)" />
-<text x="187.5" y="222.0" class="dim-text">4 отв. М4 глуб. 5</text>
-<text x="187.5" y="227.5" class="dim-text" font-size="2.8px">на Ø24* (под коннектор)</text>
+<!-- 7. Выноска глухих отверстий М3 (снизу справа) -->
+<path d="M 143 212.5 L 165 224 L 210 224" class="leader" marker-start="url(#dot)" />
+<text x="187.5" y="222.0" class="dim-text">4 отв. М3 глуб. 5</text>
+<text x="187.5" y="227.5" class="dim-text" font-size="2.8px">на Ø16* (под коннектор ф6)</text>
 
 <!-- ==================== ВИД СВЕРХУ ==================== -->
 <line x1="135" y1="50" x2="135" y2="144" class="center-line" />
@@ -235,8 +235,8 @@ def generate_geneva_driver_drawing(part_name="part_geneva_driver",
 <!-- Окружность траектории цевки R30 -->
 <circle cx="135" cy="97" r="30" class="center-line" />
 
-<!-- Окружность отверстий крепления Ø24 -->
-<circle cx="135" cy="97" r="12" class="center-line" />
+<!-- Окружность отверстий крепления Ø16 -->
+<circle cx="135" cy="97" r="8" class="center-line" />
 
 <!-- Делительная окружность конического венца d = 80 (r = 40) -->
 <circle cx="135" cy="97" r="40" class="center-line" />
@@ -286,7 +286,7 @@ if __name__ == "__main__":
         "3. Передаточное отношение конической передачи u = 1:1, угол осей Σ = 90°.",
         "4. Радиус расположения цевки: R = 30,0* мм.",
         "5. Диаметр кулачка выстоя: Ø44,0* мм (дуга выстоя 240°).",
-        "6. 4 отв. М4 глуб. 5 мм — под винты крепления фланца ВЧ.00.00.011.",
+        "6. 4 отв. М3 глуб. 5 мм — под винты крепления фланца ВЧ.00.00.011 (ф6).",
         "7. Материал: PETG. Параметры 3D-печати: заполнение 50%, 4 периметра.",
         "8. Неуказанные предельные отклонения: ±IT14/2. Острые кромки притупить R 0.5."
     ]

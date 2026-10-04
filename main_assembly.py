@@ -64,7 +64,7 @@ def build_assembly(doc):
     geneva_driver = create_geneva_driver()
     geneva_driver.Placement = FreeCAD.Placement(FreeCAD.Vector(60.0, 0, 14.0), FreeCAD.Rotation())
     
-    # 4a. Rigid Flange Coupling Connector ID: 8mm (Поз. 18)
+    # 4a. Rigid Flange Coupling Connector ID: 6mm (Поз. 23)
     flange_coupling = create_flange_coupling()
     rot_coupling = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 180.0)
     flange_coupling.Placement = FreeCAD.Placement(FreeCAD.Vector(60.0, 0, 14.0), rot_coupling)
@@ -351,8 +351,8 @@ def main():
         ('20', 'ГОСТ 8338-75', 'Подшипник 608ZZ (8x22x7)', '2', 'Сталь'),
         ('21', '', 'Вал стальной прециз. 5х75', '1', 'Сталь 45'),
         ('22', 'DIN 912', 'Винт M8x65 с гайкой', '1', 'Сталь'),
-        ('23', 'ВЧ.00.00.011', 'Фланец переходный (коннектор) ф8', '1', 'Сталь оцинк.'),
-        ('24', 'DIN 912', 'Винты M4x10 (фланец)', '4', 'Сталь 8.8'),
+        ('23', 'ВЧ.00.00.011', 'Фланец переходный (коннектор) ф6', '1', 'Сталь оцинк.'),
+        ('24', 'DIN 912', 'Винты M3x8 (фланец)', '4', 'Сталь 8.8'),
         ('25', 'ГОСТ 7798-70', 'Комплект крепежа M3, M4', '1', 'Компл.')
     ]
     
@@ -407,7 +407,7 @@ def main():
 <rect x="0" y="0" width="185" height="{notes_h}" fill="white" stroke="black" stroke-width="0.7" />
 <text x="10" y="14" font-family="osifont, Arial" font-size="4.2" font-weight="bold" fill="black">Технические требования:</text>
 <text x="10" y="25" font-family="osifont, Arial" font-size="3.2" fill="black">1. * Размеры для справок.</text>
-<text x="10" y="34" font-family="osifont, Arial" font-size="3.2" fill="black">2. Габаритные размеры изделия: 220 х 145 х 178* мм.</text>
+<text x="10" y="34" font-family="osifont, Arial" font-size="3.2" fill="black">2. Габаритные размеры изделия: 212 х 211 х 183* мм.</text>
 <text x="10" y="43" font-family="osifont, Arial" font-size="3.2" fill="black">3. Межосевое расстояние мальтийского привода: 60* мм.</text>
 <text x="10" y="52" font-family="osifont, Arial" font-size="3.2" fill="black">4. Передача коническая эвольвентная 1:1, z=40, m=2.0 мм (freecad.gears).</text>
 <text x="10" y="61" font-family="osifont, Arial" font-size="3.2" fill="black">5. Величина рабочего хода штока пробивки: 36.0* мм.</text>
@@ -456,12 +456,12 @@ def main():
 <line x1="50" y1="90" x2="50" y2="268" class="dim-line" marker-start="url(#arrow-rev)" marker-end="url(#arrow)" />
 <line x1="45" y1="90" x2="160" y2="90" class="dim-line" />
 <line x1="45" y1="268" x2="240" y2="268" class="dim-line" />
-<text x="42" y="184" class="dim-text" transform="rotate(-90 42 184)">178*</text>
+<text x="42" y="184" class="dim-text" transform="rotate(-90 42 184)">183*</text>
 
 <line x1="80" y1="285" x2="290" y2="285" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
 <line x1="80" y1="275" x2="80" y2="290" class="dim-line" />
 <line x1="290" y1="275" x2="290" y2="290" class="dim-line" />
-<text x="185" y="282" class="dim-text">210*</text>
+<text x="185" y="282" class="dim-text">212*</text>
 
 <!-- BALLOONS (Front View) -->
 <path d="M 207 99 L 170 70 L 160 70" class="leader" marker-start="url(#dot)" />

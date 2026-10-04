@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 part_flange_coupling.py
-Поз. 18: Фланец переходный жесткий (Rigid Flange Coupling Connector ID: 8mm)
+Поз. 18: Фланец переходный жесткий (Rigid Flange Coupling Connector ID: 6mm)
 Стандартное изделие для передачи крутящего момента от вала привода к ведущему колесу мальтийского механизма.
+Модернизировано под 6 мм вал мотор-редуктора JGY-370 (Строка 5 каталога AliExpress: d=6, D=22, L=16, d2=M3).
 """
 
 import sys
@@ -18,34 +19,34 @@ from freecad_utils import (
 
 def create_flange_coupling():
     """
-    Constructs the 8mm Rigid Flange Coupling connector at local origin (0,0,0).
-    - Base flange: Ø32.0 mm, thickness 3.0 mm (Z in [0, 3.0])
-    - Cylindrical hub: Ø16.0 mm, height 10.0 mm (Z in [3.0, 13.0], total height 13.0 mm)
-    - Central bore: Ø8.0 mm through
-    - 4 mounting holes: Ø4.2 mm on PCD Ø24.0 mm for M4 screws
-    - 2 set screw holes: M4 radial threaded holes at 90 deg on the hub
+    Constructs the 6mm Rigid Flange Coupling connector at local origin (0,0,0).
+    - Base flange: Ø22.0 mm, thickness 2.0 mm (Z in [0, 2.0])
+    - Cylindrical hub: Ø10.0 mm, height 10.0 mm (Z in [2.0, 12.0], total height 12.0 mm)
+    - Central bore: Ø6.0 mm through (Z in [-1.0, 14.0])
+    - 4 mounting holes: Ø3.2 mm on PCD Ø16.0 mm for M3 screws
+    - 2 set screw holes: M3 radial threaded holes at 90 deg on the hub (at Z = 7.0 mm)
     """
-    # 1. Base flange (Ø32 mm, thickness 3 mm)
-    flange = make_cylinder(16.0, 3.0, (0, 0, 0))
+    # 1. Base flange (Ø22 mm, thickness 2 mm)
+    flange = make_cylinder(11.0, 2.0, (0, 0, 0))
     
-    # 2. Cylindrical hub (Ø16 mm, height 10 mm)
-    hub = make_cylinder(8.0, 10.0, (0, 0, 3.0))
+    # 2. Cylindrical hub (Ø10 mm, height 10 mm)
+    hub = make_cylinder(5.0, 10.0, (0, 0, 2.0))
     coupling = flange.fuse(hub)
     
-    # 3. Central shaft bore (Ø8 mm through)
-    bore = make_cylinder(4.0, 15.0, (0, 0, -1.0))
+    # 3. Central shaft bore (Ø6 mm through)
+    bore = make_cylinder(3.0, 15.0, (0, 0, -1.0))
     coupling = coupling.cut(bore)
     
-    # 4. 4 Flange mounting holes (Ø4.2 mm on PCD 24 mm)
+    # 4. 4 Flange mounting holes (Ø3.2 mm on PCD 16 mm, R = 8.0 mm)
     for ang in [0, 90, 180, 270]:
         rad = math.radians(ang)
-        hole = make_cylinder(2.1, 5.0, (12.0 * math.cos(rad), 12.0 * math.sin(rad), -1.0))
+        hole = make_cylinder(1.6, 5.0, (8.0 * math.cos(rad), 8.0 * math.sin(rad), -1.0))
         coupling = coupling.cut(hole)
         
-    # 5. 2 M4 radial set screw holes on the hub (at Z = 8.0 mm, 90 deg apart)
+    # 5. 2 M3 radial set screw holes on the hub (at Z = 7.0 mm, 90 deg apart)
     for ang in [45, 135]:
         rad = math.radians(ang)
-        set_screw = Part.makeCylinder(2.0, 10.0, FreeCAD.Vector(0, 0, 8.0), FreeCAD.Vector(math.cos(rad), math.sin(rad), 0))
+        set_screw = Part.makeCylinder(1.5, 8.0, FreeCAD.Vector(0, 0, 7.0), FreeCAD.Vector(math.cos(rad), math.sin(rad), 0))
         coupling = coupling.cut(set_screw)
         
     if not coupling.isValid():
@@ -57,7 +58,7 @@ create_part = create_flange_coupling
 
 def generate_flange_coupling_drawing(part_name="part_flange_coupling",
                                      doc_code="ВЧ.00.00.011",
-                                     title_name="Фланец переходный",
+                                     title_name="Фланец переходный ф6",
                                      material="Сталь 45 оцинк.",
                                      scale=2.0,
                                      sheet="A3_Landscape",
@@ -90,8 +91,10 @@ def generate_flange_coupling_drawing(part_name="part_flange_coupling",
     # 2. Вертикальный диаметральный разрез А-А
     sec = doc.addObject("TechDraw::DrawViewSection", "SectionView")
     sec.BaseView = v_top
+    sec.ScaleType = "Custom"
+    sec.Scale = scale
     sec.SectionNormal = FreeCAD.Vector(0.0, -1.0, 0.0)
-    sec.SectionOrigin = FreeCAD.Vector(0.0, 0.0, 1.5)
+    sec.SectionOrigin = FreeCAD.Vector(0.0, 0.0, 1.0)
     sec.SectionDirection = "Down"
     sec.SectionSymbol = "A"
     page.addView(sec)
@@ -107,7 +110,7 @@ def generate_flange_coupling_drawing(part_name="part_flange_coupling",
     doc.recompute()
     
     # 3. Аксонометрический вид (Iso View)
-    add_part_view(doc, page, feat, "IsoView", (1.0, -1.2, 0.9), 1.8, 315.0, 200.0)
+    add_part_view(doc, page, feat, "IsoView", (1.0, -1.2, 0.9), 2.0, 315.0, 200.0)
     
     # 4. Основная надпись (штамп ГОСТ 2.104)
     title_fields = {
@@ -136,18 +139,37 @@ def generate_flange_coupling_drawing(part_name="part_flange_coupling",
         notes_svg = '\n'.join(notes_lines)
         
     # 6. Векторный оверлей размеров и надписей (ГОСТ 2.307)
+    # Масштаб 2:1 -> 1 мм модели = 2 мм на чертеже
+    def h_dim(x1, x2, y, text, is_dia=False, tol=''):
+        prefix = 'Ø' if is_dia else ''
+        t_str = f'{prefix}{text}{tol}'
+        p1 = f'{x1},{y} {x1+3.5},{y-0.7} {x1+3.5},{y+0.7}'
+        p2 = f'{x2},{y} {x2-3.5},{y-0.7} {x2-3.5},{y+0.7}'
+        w_box = max(len(t_str) * 2.4, 8.0)
+        xm = (x1 + x2) / 2.0
+        return f'''<line x1="{x1}" y1="{y}" x2="{x2}" y2="{y}" class="dim-line" />
+<polygon points="{p1}" fill="#000" />
+<polygon points="{p2}" fill="#000" />
+<rect x="{xm - w_box/2.0}" y="{y - 2.5}" width="{w_box}" height="4.5" fill="white" stroke="none" />
+<text x="{xm}" y="{y - 0.8}" class="dim-text">{t_str}</text>'''
+
+    def v_dim(y1, y2, x, text, text_side='left'):
+        p1 = f'{x},{y1} {x-0.7},{y1+3.5} {x+0.7},{y1+3.5}'
+        p2 = f'{x},{y2} {x-0.7},{y2-3.5} {x+0.7},{y2-3.5}'
+        ym = (y1 + y2) / 2.0
+        xt = x - 2.5 if text_side == 'left' else x + 2.5
+        return f'''<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2}" class="dim-line" />
+<polygon points="{p1}" fill="#000" />
+<polygon points="{p2}" fill="#000" />
+<text x="{xt}" y="{ym}" transform="rotate(-90 {xt} {ym})" class="dim-text">{text}</text>'''
+
+    d_hub = h_dim(125, 145, 174, '10', is_dia=True)
+    d_bore = h_dim(129, 141, 184, '6H8', is_dia=True)
+    d_flange = h_dim(113, 157, 230, '22', is_dia=True)
+    d_h_tot = v_dim(195, 219, 102, '12', 'left')
+    d_h_hub = v_dim(195, 215, 173, '10', 'right')
+
     svg_dim = f'''<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 420 297">
-<defs>
-  <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
-    <path d="M 0 2 L 10 5 L 0 8 z" fill="#000" />
-  </marker>
-  <marker id="arrow-rev" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
-    <path d="M 10 2 L 0 5 L 10 8 z" fill="#000" />
-  </marker>
-  <marker id="dot" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3" markerHeight="3">
-    <circle cx="5" cy="5" r="2.5" fill="#000" />
-  </marker>
-</defs>
 <style>
   .dim-line {{ stroke: #000; stroke-width: 0.35; fill: none; }}
   .dim-ext {{ stroke: #000; stroke-width: 0.25; fill: none; }}
@@ -160,71 +182,70 @@ def generate_flange_coupling_drawing(part_name="part_flange_coupling",
 </style>
 
 <!-- ==================== РАЗРЕЗ А-А ==================== -->
-<text x="135" y="168" class="view-title">А-А</text>
+<text x="135" y="164" class="view-title">А-А</text>
 
 <!-- Осевые линии разреза -->
-<line x1="135" y1="172" x2="135" y2="226" class="center-line" />
-<line x1="111" y1="210" x2="111" y2="224" class="center-line" />
-<line x1="159" y1="210" x2="159" y2="224" class="center-line" />
+<line x1="135" y1="168" x2="135" y2="234" class="center-line" />
+<line x1="119" y1="211" x2="119" y2="223" class="center-line" />
+<line x1="151" y1="211" x2="151" y2="223" class="center-line" />
 
-<!-- 1. Ø16 (ступица) -->
-<line x1="119" y1="194" x2="119" y2="174" class="dim-ext" />
-<line x1="151" y1="194" x2="151" y2="174" class="dim-ext" />
-<line x1="119" y1="176" x2="151" y2="176" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="135" y="174.5" class="dim-text">Ø16</text>
+<!-- 1. Ø10 (ступица) -->
+<line x1="125" y1="195" x2="125" y2="171" class="dim-ext" />
+<line x1="145" y1="195" x2="145" y2="171" class="dim-ext" />
+{d_hub}
 
-<!-- 2. Ø8 (отверстие) -->
-<line x1="127" y1="194" x2="127" y2="183" class="dim-ext" />
-<line x1="143" y1="194" x2="143" y2="183" class="dim-ext" />
-<line x1="127" y1="185" x2="143" y2="185" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="135" y="183.5" class="dim-text">Ø8H8</text>
+<!-- 2. Ø6H8 (отверстие) -->
+<line x1="129" y1="195" x2="129" y2="181" class="dim-ext" />
+<line x1="141" y1="195" x2="141" y2="181" class="dim-ext" />
+{d_bore}
 
-<!-- 3. Ø32 (фланец) -->
-<line x1="103" y1="220" x2="103" y2="234" class="dim-ext" />
-<line x1="167" y1="220" x2="167" y2="234" class="dim-ext" />
-<line x1="103" y1="231" x2="167" y2="231" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="135" y="229.5" class="dim-text">Ø32</text>
+<!-- 3. Ø22 (фланец) -->
+<line x1="113" y1="219" x2="113" y2="234" class="dim-ext" />
+<line x1="157" y1="219" x2="157" y2="234" class="dim-ext" />
+{d_flange}
 
-<!-- 4. Высота общая 13 -->
-<line x1="119" y1="194" x2="90" y2="194" class="dim-ext" />
-<line x1="103" y1="220" x2="90" y2="220" class="dim-ext" />
-<line x1="93" y1="194" x2="93" y2="220" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="90" y="207" transform="rotate(-90 90 207)" class="dim-text">13</text>
+<!-- 4. Высота общая 12 (слева) -->
+<line x1="125" y1="195" x2="99" y2="195" class="dim-ext" />
+<line x1="113" y1="219" x2="99" y2="219" class="dim-ext" />
+{d_h_tot}
 
-<!-- 5. Толщина фланца 3 -->
-<line x1="167" y1="214" x2="177" y2="214" class="dim-ext" />
-<line x1="167" y1="220" x2="177" y2="220" class="dim-ext" />
-<line x1="175" y1="209" x2="175" y2="214" class="dim-line" marker-end="url(#arrow)" />
-<line x1="175" y1="225" x2="175" y2="220" class="dim-line" marker-end="url(#arrow)" />
-<line x1="175" y1="214" x2="175" y2="220" class="dim-line" />
-<line x1="175" y1="220" x2="181" y2="220" class="dim-line" />
-<text x="178" y="218.5" class="dim-text">3</text>
+<!-- 5. Высота ступицы 10 (справа дальше) -->
+<line x1="145" y1="195" x2="176" y2="195" class="dim-ext" />
+<line x1="145" y1="215" x2="176" y2="215" class="dim-ext" />
+{d_h_hub}
 
-<!-- 6. Высота ступицы 10 -->
-<line x1="151" y1="194" x2="188" y2="194" class="dim-ext" />
-<line x1="167" y1="214" x2="188" y2="214" class="dim-ext" />
-<line x1="185" y1="194" x2="185" y2="214" class="dim-line" marker-start="url(#arrow)" marker-end="url(#arrow-rev)" />
-<text x="188" y="204" transform="rotate(-90 188 204)" class="dim-text">10</text>
+<!-- 6. Толщина фланца 2 (справа ближе к фланцу) -->
+<line x1="157" y1="215" x2="166" y2="215" class="dim-ext" />
+<line x1="157" y1="219" x2="166" y2="219" class="dim-ext" />
+<line x1="163" y1="210" x2="163" y2="215" class="dim-line" />
+<polygon points="163,215 162.3,211.5 163.7,211.5" fill="#000" />
+<line x1="163" y1="224" x2="163" y2="219" class="dim-line" />
+<polygon points="163,219 162.3,222.5 163.7,222.5" fill="#000" />
+<line x1="163" y1="215" x2="163" y2="219" class="dim-line" />
+<line x1="163" y1="217" x2="171" y2="217" class="dim-line" />
+<text x="172" y="218.5" class="dim-text-left">2</text>
 
 <!-- ==================== ВИД СВЕРХУ ==================== -->
 <line x1="135" y1="60" x2="135" y2="134" class="center-line" />
 <line x1="98" y1="97" x2="172" y2="97" class="center-line" />
-<circle cx="135" cy="97" r="24" class="center-line" />
+<circle cx="135" cy="97" r="16" class="center-line" />
 
-<line x1="111" y1="93" x2="111" y2="101" class="center-line" />
-<line x1="159" y1="93" x2="159" y2="101" class="center-line" />
-<line x1="131" y1="73" x2="139" y2="73" class="center-line" />
-<line x1="131" y1="121" x2="139" y2="121" class="center-line" />
+<line x1="119" y1="93" x2="119" y2="101" class="center-line" />
+<line x1="151" y1="93" x2="151" y2="101" class="center-line" />
+<line x1="131" y1="81" x2="139" y2="81" class="center-line" />
+<line x1="131" y1="113" x2="139" y2="113" class="center-line" />
 
 <!-- Выноска отверстий фланца -->
-<path d="M 111 73 L 85 55 L 25 55" class="leader" marker-start="url(#dot)" />
-<text x="55" y="53" class="dim-text">4 отв. Ø4,2</text>
-<text x="55" y="59" class="dim-text" font-size="2.8px">на Ø24* (под винты М4)</text>
+<circle cx="132.8" cy="78.8" r="0.8" fill="#000" />
+<path d="M 132.8 78.8 L 105 55 L 45 55" class="leader" />
+<text x="75" y="53" class="dim-text">4 отв. Ø3,2</text>
+<text x="75" y="59" class="dim-text" font-size="2.8px">на Ø16* (под винты М3)</text>
 
 <!-- Выноска отверстий ступицы -->
-<path d="M 146.3 85.7 L 175 65 L 235 65" class="leader" marker-start="url(#dot)" />
-<text x="205" y="63" class="dim-text">2 отв. М4 (установочные)</text>
-<text x="205" y="69" class="dim-text" font-size="2.8px">угол между осями 90°</text>
+<circle cx="142.1" cy="89.9" r="0.8" fill="#000" />
+<path d="M 142.1 89.9 L 165 72 L 235 72" class="leader" />
+<text x="200" y="70" class="dim-text">2 отв. М3 (установочные)</text>
+<text x="200" y="76" class="dim-text" font-size="2.8px">угол между осями 90°</text>
 
 <!-- ТЕХНИЧЕСКИЕ ТРЕБОВАНИЯ -->
 {notes_svg}
@@ -252,7 +273,7 @@ if __name__ == "__main__":
         "1. * Размеры для справок.",
         "2. Материал: Сталь 45 ГОСТ 1050-88.",
         "3. Покрытие: Ц9.хр ГОСТ 9.301-86.",
-        "4. Резьба метрическая: М4-7H ГОСТ 24705-2004.",
+        "4. Резьба метрическая: М3-7H ГОСТ 24705-2004.",
         "5. Неуказанные предельные отклонения: ±IT14/2.",
         "6. Острые кромки притупить R 0.3."
     ]
