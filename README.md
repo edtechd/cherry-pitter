@@ -10,7 +10,7 @@ A complete, production-ready, open-source automated desktop cherry and sour cher
 
 The entire mechanical assembly was synthesized and verified programmatically via **pure Python scripts calling FreeCAD B-Rep geometry and TechDraw drafting engines in headless Linux mode**, paired with automated **Gmsh + CalculiX finite element analysis (FEA)** and kinematic collision verification.
 
-![Full Machine Kinematic Simulation](./assembly_kinematics.gif)
+![Full Machine Kinematic Simulation](./berry_process_kinematics.gif)
 
 ---
 
