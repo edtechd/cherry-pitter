@@ -164,10 +164,19 @@ def create_base_frame():
     # 3.2. Мотор-редуктор JGY-370 и фланец муфты привода при (60.0, 0.0):
     #      Проходное центральное отверстие Ø17.0 мм (R=8.5 мм) под ступицу жесткой муфты
     chassis = chassis.cut(Part.makeCylinder(8.5, Z_PLATE_TOP + 4.0, FreeCAD.Vector(60.0, 0, -2.0), FreeCAD.Vector(0, 0, 1)))
-    #      4 крепежных отверстия под винты M3 (Ø3.4 мм) при (60 ± 9.0, ± 9.0)
-    for mx in [-9.0, 9.0]:
-        for my in [-9.0, 9.0]:
-            chassis = chassis.cut(Part.makeCylinder(1.7, Z_PLATE_TOP + 4.0, FreeCAD.Vector(60.0 + mx, my, -2.0), FreeCAD.Vector(0, 0, 1)))
+    #      4 крепежных отверстия под винты M3 (Ø3.4 мм) с межосевой сеткой 18.0 х 33.0 мм
+    #      (X = 60 ± 9.0 мм; Y = +9.0 мм и Y = -24.0 мм)
+    motor_holes = [
+        FreeCAD.Vector(60.0 - 9.0,   9.0, -2.0),
+        FreeCAD.Vector(60.0 + 9.0,   9.0, -2.0),
+        FreeCAD.Vector(60.0 - 9.0, -24.0, -2.0),
+        FreeCAD.Vector(60.0 + 9.0, -24.0, -2.0),
+    ]
+    for h in motor_holes:
+        # Сквозное отверстие Ø3.4 мм
+        chassis = chassis.cut(Part.makeCylinder(1.7, Z_PLATE_TOP + 4.0, h, FreeCAD.Vector(0, 0, 1)))
+        # Выемка снизу Ø8.0 мм глуб. 1.0 мм под опорные приливы Ø7.4 мм редуктора JGY-370
+        chassis = chassis.cut(Part.makeCylinder(4.0, 1.0, FreeCAD.Vector(h.x, h.y, 0.0), FreeCAD.Vector(0, 0, 1)))
 
     # 3.3. Стойка направляющей MGN9-100 (ВЧ.01.00.008):
     #      2 отверстия под винты M4 (Ø4.5 мм, R=2.25 мм)
@@ -366,12 +375,18 @@ def generate_base_frame_drawing(part_name="part_base_frame",
 <circle cx="127.4" cy="110.9" r="2.3" class="contour-line" />
 <circle cx="127.4" cy="110.9" r="4.1" class="hidden-line" />
 
-<!-- Мотор JGY-370: проходное отверстие Ø17 и 4 отв. М3 на межцентровом 18 мм -->
+<!-- Мотор JGY-370: проходное отверстие Ø17 и 4 отв. Ø3.4 на межцентровом 18х33 мм -->
 <circle cx="160.4" cy="110.9" r="4.7" class="contour-line" />
-<circle cx="155.4" cy="115.8" r="0.9" class="contour-line" />
+<!-- Верхняя пара отверстий Y = +9.0 мм -->
 <circle cx="155.4" cy="106.0" r="0.9" class="contour-line" />
-<circle cx="165.3" cy="115.8" r="0.9" class="contour-line" />
+<circle cx="155.4" cy="106.0" r="2.2" class="hidden-line" />
 <circle cx="165.3" cy="106.0" r="0.9" class="contour-line" />
+<circle cx="165.3" cy="106.0" r="2.2" class="hidden-line" />
+<!-- Нижняя пара отверстий Y = -24.0 мм -->
+<circle cx="155.4" cy="124.1" r="0.9" class="contour-line" />
+<circle cx="155.4" cy="124.1" r="2.2" class="hidden-line" />
+<circle cx="165.3" cy="124.1" r="0.9" class="contour-line" />
+<circle cx="165.3" cy="124.1" r="2.2" class="hidden-line" />
 
 <!-- Стойка направляющей MGN9: 2 отверстия Ø4.5 -->
 <circle cx="133.5" cy="155.6" r="1.2" class="contour-line" />
@@ -400,7 +415,7 @@ def generate_base_frame_drawing(part_name="part_base_frame",
 <!-- Осевые линии вида сверху -->
 <line x1="85" y1="110.9" x2="205" y2="110.9" class="center-line" />
 <line x1="127.4" y1="50" x2="127.4" y2="175" class="center-line" />
-<line x1="160.4" y1="98" x2="160.4" y2="124" class="center-line" />
+<line x1="160.4" y1="98" x2="160.4" y2="132" class="center-line" />
 
 <!-- РАЗМЕРЫ НА ВИДЕ СВЕРХУ -->
 <!-- Ширина 196* мм -->
@@ -424,8 +439,8 @@ def generate_base_frame_drawing(part_name="part_base_frame",
 <text x="68" y="128.5" class="dim-text-left">Ø8,4 (ось М8); цек. Ø15 глуб. 5</text>
 
 <!-- Выноска отверстий мотора JGY-370 -->
-<path d="M 160 113 L 180 135 L 215 135" class="leader" marker-start="url(#dot)" />
-<text x="182" y="133.5" class="dim-text-left">Ø17 (муфта); 4 отв. М3</text>
+<path d="M 160 115 L 175 138 L 225 138" class="leader" marker-start="url(#dot)" />
+<text x="177" y="136.5" class="dim-text-left">Ø17 (муфта); 4 отв. Ø3,4 (18х33 под JGY-370)</text>
 
 
 <!-- ==================== ГЛАВНЫЙ ВИД (FrontView) ==================== -->
